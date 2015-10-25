@@ -75,123 +75,216 @@ Features:
 Quick Usage
 ===========
 
-With the decorator::
+The example below is available in the source as a single file test. It's broken
+down into parts to ease up reading::
 
-  from metaparams import metaparams
-
-
-  @metaparams()
-  class A(object):
-
-      params = (
-          ('p1', True, 'doc'),
-          ('p2', 99),
-      )
-
-      def __init__(self):
-          pass
-
-  a = A()
-
-  # Defined params are reachable below the attribute params
-  print(a.params.p1)
-  print(a.params.p2)
-
-  # Modification of default values can be checked
-  assert a.params._isdefault('p1')
-
-  # Inheriting with modification an extension
-  class B(A):
-
-      params = (
-          ('p1', False,),  # changed default value of p1
-          ('p3', None),  # new parameter
-      )
-
-      def __init__(self):
-          pass
-
-  b = B()
-
-  # Defined params are reachable below the attribute params
-  print(b.params.p1)
-  print(b.params.p2)
-  print(b.params.p3)
-
-  # Modification of default values can be checked
-  assert b.params._isdefault('p1')
-
-  # Over the class we can also check defaults
-  # B has different default value for p1 than A
-  assert b.params.p1 != A.params._default('p1')
-
-  # The name of the attribute 'params' can be changed
-  # and a shorter alias (PEP-8 ...) added
-  @metaparams(_pname='kargs', _pshort=True)
-  class A(object):
-
-      kargs = (
-          ('p1', True, 'doc'),
-          ('p2', 99),
-      )
-
-      def __init__(self):
-          pass
-
-  a = A()
-
-  # Defined params are reachable below the attribute params
-  print(a.kargs.p1)
-  print(a.kargs.p2)
-
-  print(a.k.p1)
-  print(a.k.p2)
-
-  # Modification of default values can be checked
-  assert a.kargs._isdefault('p1')
+    from __future__ import (absolute_import, division, print_function,
+                            unicode_literals)
 
 
-  # The metaclass works also so ... but it's a metaclass
+    from metaparams import metaparams, MetaParams, ParamsBase
 
-  class A(MetaParams.as_metaclass(_pname='kargs', _pshort=True)):
-
-      kargs = (
-          ('p1', True, 'doc'),
-          ('p2', 99),
-      )
-
-      def __init__(self):
-          pass
-
-  a = A()
-
-  # Defined params are reachable below the attribute params
-  print(a.kargs.p1)
-  print(a.kargs.p2)
-
-  print(a.k.p1)
-  print(a.k.p2)
-
-  # Modification of default values can be checked
-  assert a.kargs._isdefault('p1')
+    print('=' * 50)
+    print('Creating A with params with DECORATOR')
 
 
-  # And finally an already cooked base class with no customization
-  class A(ParamsBase):
+    @metaparams()
+    class A(object):
 
-      params = (
-          ('p1', True, 'doc'),
-          ('p2', 99),
-      )
+        params = (
+            ('p1', True, 'doc'),
+            ('p2', 99),
+        )
 
-      def __init__(self):
-          pass
+        def __init__(self):
+            pass
 
-  a = A()
+    print('-- Instantiating A with no kwargs')
+    a = A()
 
-  # Defined params are reachable below the attribute params
-  print(a.params.p1)
-  print(a.params.p2)
+    # Defined params are reachable below the attribute params
+    print('a.params.p1:', a.params.p1)
+    print('a.params.p2:', a.params.p2)
 
-  # Modification of default values can be checked
-  assert a.params._isdefault('p1')
+    # Modification of default values can be checked
+    print('Checking if p1 has default value:', a.params._isdefault('p1'))
+
+    print('=' * 50)
+    print('Creating B as subclass from A, changing p1, adding p3')
+
+This first part produces the followin output::
+
+    ==================================================
+    Creating A with params with DECORATOR
+    -- Instantiating A with no kwargs
+    a.params.p1: True
+    a.params.p2: 99
+    Checking if p1 has default value: True
+
+The 2nd part::
+
+    # Inheriting with modification an extension
+    class B(A):
+
+        params = (
+            ('p1', False,),  # changed default value of p1
+            ('p3', None),  # new parameter
+        )
+
+        def __init__(self):
+            pass
+
+    print('-- Instantiating B with no kwargs')
+    b = B()
+
+    # Defined params are reachable below the attribute params
+    print('b.param.p1 (default changed):', b.params.p1)
+    print('b.params.p2 (same default):', b.params.p2)
+    print('b.params.p3 (new param):', b.params.p3)
+
+    # Modification of default values can be checked
+    print('Checking if p1 has default value:', b.params._isdefault('p1'))
+
+    # Over the class we can also check defaults
+    # B has different default value for p1 than A
+    print('Checking default in B for p1 is not the same as default in A:',
+          b.params.p1 != A.params._default('p1'))
+
+Output::
+
+    ==================================================
+    Creating B as subclass from A, changing p1, adding p3
+    -- Instantiating B with no kwargs
+    b.param.p1 (default changed): False
+    b.params.p2 (same default): 99
+    b.params.p3 (new param): None
+    Checking if p1 has default value: True
+    Checking default in B for p1 is not the same as default in A: True
+
+
+3rd part::
+
+    print('=' * 50)
+    print('Recreating A with Decorator - name is "kargs" and short alias')
+
+
+    # The name of the attribute 'params' can be changed
+    # and a shorter alias (PEP-8 ...) added
+    @metaparams(_pname='kargs', _pshort=True)
+    class A(object):
+
+        kargs = (
+            ('p1', True, 'doc'),
+            ('p2', 99),
+        )
+
+        def __init__(self):
+            pass
+
+    print('-- Instantiating A with no kwargs')
+    a = A()
+
+    # Defined params are reachable below the attribute params
+    print('Checking if a params are reachable over "kargs"')
+    print('a.kargs.p1:', a.kargs.p1)
+    print('a.kargs.p2:', a.kargs.p2)
+
+    print('Checking if a params are reachable over shorter alias "k"')
+    print(a.k.p1)
+    print(a.k.p2)
+
+    # Modification of default values can be checked
+    print('Checking if p1 has default value:', a.kargs._isdefault('p1'))
+
+Output::
+
+    ==================================================
+    Recreating A with Decorator - name is "kargs" and short alias
+    -- Instantiating A with no kwargs
+    Checking if a params are reachable over "kargs"
+    a.kargs.p1: True
+    a.kargs.p2: 99
+    Checking if a params are reachable over shorter alias "k"
+    True
+    99
+    Checking if p1 has default value: True
+
+
+4th part::
+
+    print('=' * 50)
+    print('Recreating A with new attr for params - "kargs" and short alias')
+    print('USING THE METACLASS')
+
+
+    # The metaclass works also so ... but it's a metaclass
+    class A(MetaParams.as_metaclass(_pname='kargs', _pshort=True)):
+
+        kargs = (
+            ('p1', True, 'doc'),
+            ('p2', 99),
+        )
+
+        def __init__(self):
+            pass
+
+    a = A()
+
+    # Defined params are reachable below the attribute params
+    print('Checking if a params are reachable over "kargs"')
+    print('a.kargs.p1:', a.kargs.p1)
+    print('a.kargs.p2:', a.kargs.p2)
+
+    print('Checking if a params are reachable over shorter alias "k"')
+    print(a.k.p1)
+    print(a.k.p2)
+
+    # Modification of default values can be checked
+    print('Checking if p1 has default value:', a.kargs._isdefault('p1'))
+
+Output::
+
+    ==================================================
+    Recreating A with new attr for params - "kargs" and short alias
+    USING THE METACLASS
+    Checking if a params are reachable over "kargs"
+    a.kargs.p1: True
+    a.kargs.p2: 99
+    Checking if a params are reachable over shorter alias "k"
+    True
+    99
+    Checking if p1 has default value: True
+
+
+Final part::
+
+    print('=' * 50)
+    print('Recreating A with ParamsBase ... nothing can be changed')
+
+    # And finally an already cooked base class with no customization
+    class A(ParamsBase):
+
+        params = (
+            ('p1', True, 'doc'),
+            ('p2', 99),
+        )
+
+        def __init__(self):
+            pass
+
+    a = A()
+
+    # Defined params are reachable below the attribute params
+    print('a.params.p1:', a.params.p1)
+    print('a.params.p2:', a.params.p2)
+
+    # Modification of default values can be checked
+    print('Checking if p1 has default value:', a.params._isdefault('p1'))
+
+Output::
+
+    ==================================================
+    Recreating A with ParamsBase ... nothing can be changed
+    a.params.p1: True
+    a.params.p2: 99
+    Checking if p1 has default value: True
