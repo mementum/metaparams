@@ -1,0 +1,9 @@
+1.0.1
+
+  - Added _reset method
+  - Dropped internal metaframe and added it as install requirement
+  - documentation part of param update supported with inheritance
+
+1.0.0
+
+  - Initial release
