@@ -150,33 +150,51 @@ class Params(object):
         '''Returns a list with the parameter names'''
         return list(cls._pdefs.keys())
 
-    def _values(self, *args):
-        '''Returns a list with the current parameter values'''
-        return [getattr(self, x) for x in args or self._pdefs]
+    def _values(self, *names):
+        '''Returns a list with the current parameter values
+
+        If names are given, return for only those requested
+        '''
+        return [getattr(self, x) for x in names or self._pdefs]
 
     @classmethod
-    def _defaults(cls):
-        '''Returns a list with the default parameter values'''
-        return list(cls._pdefs.values())
+    def _defaults(cls, *names):
+        '''Returns a list with the default parameter values
+
+        If names are given, return for only those requested
+        '''
+        return [cls._pdefs[x] for x in names or cls._pdefs]
 
     @classmethod
-    def _docs(cls):
-        '''Returns a list with the parameter documentations'''
-        return list(cls._pdocs.values())
+    def _docs(cls, *names):
+        '''Returns a list with the parameter documentations
 
-    def _kwvalues(self):
-        '''Returns an OrderedDict names/current values pairss'''
-        return OrderedDict(map(lambda x: (x, getattr(self, x)), self._pdefs))
+        If names are given, return for only those requested
+        '''
+        return [cls._pdocs[x] for x in names or cls._pdefs]
+
+    def _kwvalues(self, *names):
+        '''Returns an OrderedDict names/current values pairss
+
+        If names are given, return for only those requested
+        '''
+        return OrderedDict(map(lambda x: (x, getattr(self, x)),
+                               names or self._pdefs))
 
     @classmethod
-    def _kwdefaults(cls):
-        '''Returns an OrderedDict names/default values pairs'''
-        return cls._pdefs.copy()
+    def _kwdefaults(cls, *names):
+        '''Returns an OrderedDict names/default values pairs
+
+        If names are given, return for only those requested
+        '''
+        return OrderedDict(map(lambda x: (x, cls._pdefs[x]),
+                               names or cls._pdefs))
 
     @classmethod
-    def _kwdocs(cls):
+    def _kwdocs(cls, *names):
         '''Returns an OrderedDict names/doc values pairs'''
-        return cls._pdocs.copy()
+        return OrderedDict(map(lambda x: (x, cls._pdocs[x]),
+                               names or cls._pdefs))
 
 
 class MetaParams(MetaFrame):
@@ -229,6 +247,8 @@ class MetaParams(MetaFrame):
             def __new__(metaklass, name, this_bases, d):
                 mt = meta
                 if kwargs:
+                    # Create a subclass of "meta" (itself really) with the
+                    # given kwargs as the dictionary of the class
                     mt = type(str('xxxxx'), (meta,), kwargs)
 
                 return mt(name, bases, d)
