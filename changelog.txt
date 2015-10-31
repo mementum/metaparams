@@ -1,3 +1,7 @@
+1.0.2
+  - Retrieval API now accepts a "names" (in the form of *args) restriction to
+    limit the returned items (values, defaults, docs)
+
 1.0.1
 
   - Added _reset method
