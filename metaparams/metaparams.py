@@ -117,6 +117,16 @@ class Params(object):
 
         return newcls
 
+    def _reset(self, *args):
+        '''Resets specific parameters (or all) to default values
+
+        Args:
+            *args: names of parameters to reset
+                if no name is given all parameters will be reset
+        '''
+        for pname in args or self._pdefs:
+            setattr(self, pname, self._pdefs[pname])
+
     def _isdefault(self, pname):
         '''Returns True if parameter ``pname`` still has the default value'''
         return getattr(self, pname) == self._pdefs[pname]
