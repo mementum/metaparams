@@ -150,9 +150,9 @@ class Params(object):
         '''Returns a list with the parameter names'''
         return list(cls._pdefs.keys())
 
-    def _values(self):
+    def _values(self, *args):
         '''Returns a list with the current parameter values'''
-        return [getattr(self, x) for x in self._pdefs]
+        return [getattr(self, x) for x in args or self._pdefs]
 
     @classmethod
     def _defaults(cls):
