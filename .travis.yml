@@ -9,8 +9,9 @@ python:
   - "pypy3"
 
 # command to install dependencies
-# install:
+install:
 #  - pip install your_package
+  - pip install metaframe
 
 # command to run tests
 script: cd tests && PYTHONPATH=.. nosetests -v -v
