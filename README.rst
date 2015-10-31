@@ -112,7 +112,7 @@ down into parts to ease up reading::
     print('=' * 50)
     print('Creating B as subclass from A, changing p1, adding p3')
 
-This first part produces the followin output::
+This first part produces the following output::
 
     ==================================================
     Creating A with params with DECORATOR

@@ -4,7 +4,7 @@ Usage
 Params definition
 =================
 
-The definition of params is as follows::
+The definition of params can be done as follows::
 
   class A(object):
       params = (
@@ -77,14 +77,28 @@ Of course:
    It should be obvious that the ``params`` tuple of tuples has been changed
    into an object.
 
+Params syntax
+-------------
+
+The params are defined as a tuple of tuples. Of course being this Python it can
+be a list of tuples, a tuple of lists and actually any iterable of
+iterables. The interior tuples contain the following fields:
+
+  - 1st item: param name
+  - 2nd item: param default value
+  - 3rd item (optional): param documentation (empty if not provided)
+
+    Inheritance has not yet been visited, but if a param doc is changed
+    during inheritance it will take over the original definition of the base class
+
 
 Using your own ``params`` name
 ------------------------------
 
 The ``metaparams`` decorator accepts 2 parameters:
 
-  - ``_pname`` (def 'params'): Name of the attribute to look for the 2/3 tuples and use to
-    set/store the Params subclasses/instances
+  - ``_pname`` (def 'params'): Name of the attribute to look for the 2/3 tuples
+    and use to set/store the Params subclasses/instances
 
   - ``_pshort`` (def: False): Install a 1-letter alias of the Params instance (if
     the original name is longer than 1 and respecting a leading underscore if
@@ -207,8 +221,8 @@ customize the parameters::
 And now even the short alias ``_k`` would be available.
 
 
-You may directly subclass ``MetaParams`` before applying it to change the name of the
-``params`` atribute::
+You may directly subclass ``MetaParams`` before applying it to change the name
+of the ``params`` atribute::
 
   from metaparams import MetaParams
 

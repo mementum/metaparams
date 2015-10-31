@@ -15,7 +15,11 @@ Reference
 
    .. automethod:: _subclass
 
+   .. automethod:: _reset
+
    .. automethod:: _isdefault
+
+   .. automethod:: _value
 
    .. automethod:: _default
 
