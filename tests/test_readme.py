@@ -118,6 +118,7 @@ print('=' * 50)
 print('Recreating A with new attr for params - "kargs" and short alias')
 print('USING THE METACLASS')
 
+
 # The metaclass works also so ... but it's a metaclass
 class A(MetaParams.as_metaclass(_pname='kargs', _pshort=True)):
 
