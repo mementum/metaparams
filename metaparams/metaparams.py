@@ -255,12 +255,21 @@ class MetaParams(MetaFrame):
 
         return cls
 
-    def _init_pre(cls, obj, *args, **kwargs):
+    def _new_do(cls, *args, **kwargs):
         pname = cls._pname
 
         # Create params and set the values from the kwargs
         paramscls = getattr(cls, pname)
+
+        # Create an instance - Note: kwargs can (will) be modified by
+        # the create instance ... because it is passed as kwargs and not
+        # as **kwargs
         params = paramscls(kwargs)
+
+        # Call up the chain to create the object
+        obj, args, kwargs = super(MetaParams, cls)._new_do(*args, **kwargs)
+
+        # Put params instance the object instance, obscuring class definition
         setattr(obj, pname, params)
 
         # Add a 1-letter alias if requested, respecting 1 leading underscore
@@ -269,7 +278,7 @@ class MetaParams(MetaFrame):
         if cls._pshort and len(pname) > (1 + pname_leadunder):
             setattr(obj, pname[0 + pname_leadunder], params)
 
-        return super(MetaParams, cls)._init_pre(obj, *args, **kwargs)
+        return obj, args, kwargs
 
 
 def metaparams(_pname='params', _pshort=False):
