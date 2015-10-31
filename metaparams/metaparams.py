@@ -99,7 +99,9 @@ class Params(object):
             doc = np[2] if len(np) > 2 else ''
 
             pdefs[name] = default
-            pdocs[name] = doc
+            if name not in pdocs or doc:
+                # only set if not present or is an update
+                pdocs[name] = doc
 
         # Dynamically create the new class
         klsname = str(cls.__name__ + '_' + clsname)
