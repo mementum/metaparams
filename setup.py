@@ -20,9 +20,10 @@
 ###############################################################################
 import os.path
 import codecs  # To use a consistent encoding
+import string
+import random
 import setuptools
-
-import metaparams
+import sys
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -31,7 +32,8 @@ with codecs.open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 pname = 'metaparams'
-pversion = metaparams.__version__
+execfile(os.path.join(pname, 'version.py'))
+pversion = __version__
 gurl = 'https://github.com/mementum/' + pname
 gdurl = gurl + '/tarball/' + pversion
 
@@ -43,8 +45,7 @@ setuptools.setup(
     # https://packaging.python.org/en/latest/single_source_version.html
     version=pversion,
 
-    description=('MetaClass supporting fine grained control of object creation'
-                 'and initialization'),
+    description=('Declarative parameters definition for classes'),
 
     long_description=long_description,
 
@@ -97,7 +98,7 @@ setuptools.setup(
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
     # packages=setuptools.find_packages(exclude=['docs', 'samples']),
-    packages=['metaparams'],
+    packages=[pname],
 
     # List run-time dependencies here.
     # These will be installed by pip when your
