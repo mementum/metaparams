@@ -1,3 +1,7 @@
+1.0.4
+  - Removed the need to use () in decorator if no kwargs are specified
+  - pip packaging fixes for Py3
+
 1.0.3
   - pip packaging fixes
 
@@ -6,7 +10,6 @@
     limit the returned items (values, defaults, docs)
 
 1.0.1
-
   - Added _reset method
   - Dropped internal metaframe and added it as install requirement
   - documentation part of param update supported with inheritance
