@@ -28,7 +28,7 @@ print('=' * 50)
 print('Creating A with params with DECORATOR')
 
 
-@metaparams()
+@metaparams
 class A(object):
 
     params = (
