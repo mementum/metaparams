@@ -17,7 +17,6 @@ The definition of params can be done as follows::
 
 But wait ... this is a regular class not yet params-enabled
 
-
 Decorator enabling
 ==================
 
@@ -25,7 +24,7 @@ Simply apply the decorator::
 
   from metaparams import metaparams
 
-  @metaparams()
+  @metaparams
   class A(object):
       params = (
           ('param1', True, 'This is param1'),  # including doc
@@ -34,10 +33,6 @@ Simply apply the decorator::
 
       def __init__(self, p1=True):
         self.p1 = p1
-
-.. note::
-   Please notice the ``()`` when applying the decorator. This is because the
-   decorator can take parameters. See below.
 
 Et voilá! Of course we still need to make something sensible out of the params::
 

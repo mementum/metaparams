@@ -88,7 +88,7 @@ down into parts to ease up reading::
     print('Creating A with params with DECORATOR')
 
 
-    @metaparams()
+    @metaparams
     class A(object):
 
         params = (

@@ -301,7 +301,7 @@ class MetaParams(MetaFrame):
         return obj, args, kwargs
 
 
-def metaparams(_pname='params', _pshort=False):
+def metaparams(*args, **kwargs):
     '''Decorator to make a class "Params"-enabled
 
     Args:
@@ -313,6 +313,11 @@ def metaparams(_pname='params', _pshort=False):
             Install a 1-letter alias of the Params instance (if the original
             name is longer than 1 and respecting a leading underscore if any)
     '''
+    # done here to support removing the () call with the args checks below
+    # if func defintion had kwargs _pname/_pshort the check would not succeed
+    _pname = kwargs.get('_pname', 'params')
+    _pshort = kwargs.get('_pshort', False)
+
     def real_decorator(cls):
 
         # Subclass MetaParams with the passed pname/pshort values
@@ -331,6 +336,11 @@ def metaparams(_pname='params', _pshort=False):
 
         return newcls
 
+    if len(args):
+        # In this case no kwargs are there ... we can kick the real decorator
+        return real_decorator(*args)
+
+    # kwargs are present, go a second round in which the cls is passed in *args
     return real_decorator
 
 

@@ -27,7 +27,7 @@ from metaparams import metaparams
 def test_run(main=False):
 
     # Testing standard behaviour
-    @metaparams()
+    @metaparams
     class A(object):
 
         params = (
