@@ -540,6 +540,10 @@ def metaparams(*args, **kwargs):
         # Subclass MetaParamsBase with the passed pname/pshort values
         metadct = {KWARG_PNAME: _pname, KWARG_PSHORT: _pshort}
         newmeta = type('xxxxx', (MetaParamsBase,), metadct)
+        # Remove any params definition and let it be parsed by the subclass
+        pattr = getattr(cls, _pname, {})
+        if pattr:
+            delattr(cls, _pname)
 
         # Subclass with the new metaclass from above and the params definition
         newcls = newmeta(cls.__name__, (cls,), {_pname: pattr})
