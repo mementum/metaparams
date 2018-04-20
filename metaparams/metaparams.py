@@ -2,7 +2,7 @@
 # -*- coding: utf-8; py-indent-offset:4 -*-
 ###############################################################################
 #
-# Copyright (C) 2015 Daniel Rodriguez
+# Copyright (C) 2015-2018 Daniel Rodriguez
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,354 +18,502 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ###############################################################################
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-
-from collections import OrderedDict
+import textwrap
 import sys
 
-from metaframe import MetaFrame
+from metaframe import MetaFrame, MetaFrameBase
+
+__all__ = ['MetaParams', 'Params', 'MetaParamsBase', 'ParamsBase']
+
+PARAMS_NAME = 'params'
+PARAMS_SHORT = True
+
+KWARG_PNAME = 'pname'
+KWARG_PSHORT = 'pshort'
+
+# Names and default values for the dictionary entry defining each parameter
+NAME_VAL = 'value'
+VALUE_VAL = None
+NAME_REQUIRED = 'required'
+VALUE_REQUIRED = False
+NAME_DOC = 'doc'
+VALUE_DOC = ''
+NAME_TYPE = 'type'
+VALUE_TYPE = None
+NAME_TRANSFORM = 'transform'
+VALUE_TRANSFORM = None
+NAME_ARGPARSE = 'argparse'
+VALUE_ARGPARSE = True
+
+TUPLE_NAME_ORDER = (NAME_VAL, NAME_REQUIRED, NAME_DOC, NAME_TYPE,
+                    NAME_TRANSFORM, NAME_ARGPARSE)
+
+TUPLE_VALUE_ORDER = (VALUE_VAL, VALUE_REQUIRED, VALUE_DOC, VALUE_TYPE,
+                     VALUE_TRANSFORM, VALUE_ARGPARSE)
+
+NAME_DOCARGS = 'Args'
+
+PARAMS = {}  # keeps the complete definition or a param
+DEFAULTS = {}  # keeps params names and default values
+CLS = {}
 
 
-class Params(object):
-    '''Holds a 3-tuple (in the form of 2 OrderedDicts) list of informations to
-    define params (name, default, doc), with "doc" optionally being empty.
+class MetaParams(type):
+    def __new__(meta, name, bases, dct, **kwargs):
+        # Normalize the info passed by the parent classes of the host
+        pbases = kwargs.get('pbases', [{}])
 
-    During init it receives a reference to the ``kwargs`` (non-expanded to
-    enable modification) passed to the class holding it. All params are
-    initialized to either the default value or the value passed with the kwargs
-    (in which case it is removed from kwargs)
+        pdct = {}  # params dictionary for class creation
+        for pbase in pbases[:-1]:  # all bases definitions except last (new)
+            pbasedct = PARAMS.get(pbase, pbase)  # get params cls if reg'ed
 
-    The class can subclass itself with a new set of params (passed as real
-    3-tuples) and other bases (subclasses of Params themselves)
+            # Add or update each element. In base clases we have either a dict
+            # or a params subclass. Both support the [] operator and iteration
+            for k in pbasedct:
+                if k in pdct:  # other base(s) have added/update the key before
+                    pdct[k].update(pbasedct[k])
+                else:
+                    pdct[k] = pbasedct[k]  # set it for the 1st eim
 
-    This class is not meant to be used directly but rather by the metaclass
-    MetaParams which installs / subclasses it in a client class and also
-    creates an instance
+        nparams = pbases[-1]  # last is new declaration
+        if not isinstance(nparams, dict):  # support non-dict declaration
+            # (name, val, [doc, [required, [type, [transform, [argparse]]]]])
+            # or
+            # (name, val, [required, [doc, [type, [transform, [argparse]]]]])
 
-    Attribute setting:
-      - Defined params can be set
-      - New attributes with a leading underscore can be set
+            ndct = OrderedDict()  # to hold a complete definition in dict form
 
-      - Setting other attributes is rejected and raises an AttributeError
+            # Generate dict entries for each parameter in the tuple definition
+            for np in nparams:
+                pn, pv, *pothers = np
+                ndctpn = {NAME_VAL: pv}
+                for nord, vord in zip(TUPLE_NAME_ORDER, TUPLE_VALUE_ORDER):
+                    px, *pothers = pothers
+                    ndctpn[nord] = px
+                    if not pothers:
+                        break
+
+                # Support (val, doc, [req ...]) and (val, req, [doc ...])
+                try:
+                    req_or_doc = ndctpn[NAME_REQUIRED]
+                except KeyError:
+                    pass  # only value was specified ..
+                else:
+                    if isinstance(req, str):
+                        # Doc was given, swap with required (or default value)
+                        ndctpn[NAME_REQUIRED] = ndctpn.get(NAME_DOC,
+                                                           VALUE_REQUIRED)
+                        ndctpn[NAME_DOC] = req_or_doc
+
+                ndct[pn] = ndctpn  # add parsed tuple definition to larger dict
+
+            nparams = ndct
+
+        else:
+            for k, v in nparams.items():  # convert items which are not dicts
+                if not isinstance(v, dict):
+                    nparams[k] = {NAME_VAL: v}
+
+        # Update the global params dict with the new definition
+        for k, v in nparams.items():  # guaranteed to be a dict
+            if k in pdct:  # other base(s) have added/update the key before
+                pdct[k].update(v)
+            else:
+                pdct[k] = v  # set it for the 1st eim
+
+        for k, v in pdct.items():
+            if False:
+                if not isinstance(v, dict):  # shorthand, expand to full syntax
+                    v = {NAME_VAL: v}
+                else:
+                    pass
+
+            v.setdefault(NAME_VAL, VALUE_VAL)
+
+            # Set other defaults (if needed) for extra info attributes
+            v.setdefault(NAME_REQUIRED, VALUE_REQUIRED)
+            v.setdefault(NAME_DOC, VALUE_DOC)
+            v.setdefault(NAME_TYPE, VALUE_TYPE)
+            v.setdefault(NAME_TRANSFORM, VALUE_TRANSFORM)
+            v.setdefault(NAME_ARGPARSE, VALUE_ARGPARSE)
+
+            pdct[k] = v  # store the complete param definition
+
+        # Now ... auto-document
+        ptmpl = ['  - {}:']
+        ptmpl += ['(default: {})']
+        ptmpl += ['(required: {})']
+        ptmpl += ['(type: {})']
+        ptmpl += ['(transform: {})']
+        ptmpl += ['(argparse: {})']
+        ptmpl += ['\n{}']
+        ptmpl = ' '.join(ptmpl)
+
+        doc = [NAME_DOCARGS, '\n']
+        for k, v in pdct.items():
+            vdoc = textwrap.indent(textwrap.fill(v[NAME_DOC]), prefix='    ')
+            t = ptmpl.format(
+                k,
+                v[NAME_VAL],
+                v[NAME_REQUIRED],
+                v[NAME_TYPE],
+                v[NAME_TRANSFORM],
+                v[NAME_ARGPARSE],
+                vdoc + ('\n' if vdoc else ''))
+            doc += [t]
+
+        dct['__doc__'] = '\n'.join(doc)
+
+        # Create an ad-hoc Params subclass with collected values (and defaults)
+        # dct contains the definition of methods, etc, ... expand with slots
+        dct['__slots__'] = list(pdct.keys())
+
+        # Generate a module_class name for indentification purposes
+        cls = super().__new__(meta, name, bases, dct)
+
+        # Register the defaults and the complete dict for the created class
+        PARAMS[cls] = pdct  # register the defaults for the class
+        # First with Python 3.6 it is possible to use the comprehension
+        # DEFAULTS[cls] = OrderedDict(k, v[NAME_VAL] for k, v in pdct.items())
+        # And with 3.7
+        # DEFAULTS[cls] = {k: v[NAME_VAL] for k, v in pdct.items()}
+        # Meanwhile
+        DEFAULTS[cls] = defscls = {}
+        for k, v in pdct.items():
+            defscls[k] = v[NAME_VAL]
+
+        return cls  # return the new subclass
+
+    # These 3 defined here to make them work as class methods of Params
+    # subclasses. They MUST not be marked as @classmethod, because they would
+    # then become classmethods of the metaclass and not of the class
+    def __len__(cls):
+        return len(DEFAULTS[cls])
+
+    def __iter__(cls):
+        return iter(DEFAULTS[cls])
+
+    def __getitem__(cls, name):
+        return DEFAULTS[cls][name]
+
+    def __str__(cls):
+        return str(PARAMS[cls])
+
+
+class Params(metaclass=MetaParams):
+    # Intended to generate subclasses dynamically for ParamsBase subclasses
+    __slots__ = []  # params are declared once. no other attributes allowed
+
+    # Error messages for exceptions raised during instantiation
+    _ERR_REQ = 'Required parameter "{}" in params "{}" not provided'
+    _ERR_TYPE = 'Wrong type "{}" for param "{}" / type "{}" in params "{}"'
+    _ERR_TR = 'Error transforming param "{}" with value "{}" in params "{}"'
+
+    # The parameters are expressed as dictionaries. The entries are either
+    # key: val
+    # or
+    # key: dict(), where the keys may be: 'val', 'required', 'doc')
+    # default values set to: required=False, val=None, doc=''
+    def __init__(self, **kwargs):
+        clsname = self.__class__.__name__
+        # loop over the defined parameters and the default values
+        for name, val in PARAMS[self.__class__].items():
+            if name not in kwargs:
+                # name is not provided, check if it's a required parameter
+                if val[NAME_REQUIRED]:
+                    errmsg = self._ERR_REQ.format(name, clsname)
+                    raise ValueError(errmsg)
+
+                # Not provided, not required, use the default value
+                setattr(self, name, val[NAME_VAL])
+
+            else:  # name is provided in kwargs
+                v = kwargs[name]
+                # See if type check is needed
+                t = val[NAME_TYPE]
+                if t and not isinstance(v, t):
+                    errmsg = self._ERR_TYPE.format(type(v), name, t, clsname)
+                    raise TypeError(errmsg)
+
+                # Check if transformation is needed and apply it
+                tr = val[NAME_TRANSFORM]
+                if tr:
+                    try:
+                        v = tr(v)
+                    except Exception as e:
+                        errmsg = self._ERR_TR.format(name, v, clsname)
+                        raise ValueError(errmsg)
+
+                # everything worked out, set the parameter
+                setattr(self, name, v)
+
+    def __str__(self):
+        return str(self._kwargs())
+
+    @classmethod
+    def __iter__(cls):
+        return iter(DEFAULTS[cls])
+
+    @classmethod
+    def __len__(cls):
+        return len(DEFAULTS[cls])
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __setitem__(self, key, val):
+        setattr(self, key, val)
+
+    @classmethod
+    def _remaining(cls, **kwargs):
+        '''Returns the keywords arguments which are not consumed by this Params
+        class'''
+        return {k: v for k, v in kwargs.items() if k not in cls}
+
+    @classmethod
+    def _defkwargs(cls):
+        '''Returns a dict with the default values of the params'''
+        return DEFAULTS[cls].copy()
+
+    @classmethod
+    def _defkeys(cls):
+        '''Returns the define param names as an iterable'''
+        return DEFAULTS[cls].keys()
+
+    @classmethod
+    def _defitems(cls):
+        '''Returns the names and default values for the params as an iterable
+        of pairs'''
+        return DEFAULTS[cls].items()
+
+    @classmethod
+    def _defvalues(cls):
+        '''Returns the default values for the params as an iterable'''
+        return DEFAULTS[cls].values()
+
+    @classmethod
+    def _defvalue(cls, name):
+        '''Returns the default value for the parameter ``name```'''
+        return DEFAULTS[cls][name]
+
+    @classmethod
+    def _keys(cls):
+        '''Returns the parameter names as an iterable'''
+        return DEFAULTS[cls].keys()  # keys are unique, unlike values
+
+    def _values(self):
+        '''Returns the parameter actual values as an iterable'''
+        return (getattr(self, k) for k in self)
+
+    def _value(self, name):
+        '''Returns the actual value for parameter ``name``'''
+        return getattr(self, name)
+
+    def _items(self):
+        '''Returns the names and actual values for the params as an iterable
+        of pairs'''
+        return ((k, getattr(self, k)) for k in self)
+
+    def _kwargs(self):
+        '''Returns a dict with the actual values of the params'''
+        return {k: getattr(self, k) for k in self}
+
+    def _isdefault(self, name):
+        '''Returns a boolean indicating if param ``name`` has the default
+        value'''
+        return getattr(self, name) == DEFAULTS[self.__class__][name]
+
+    @classmethod
+    def _isrequired(cls, name):
+        '''Returns a boolean indicating if param ``name`` is required'''
+        return PARAMS[cls][name][NAME_REQUIRED]
+
+    @classmethod
+    def _doc(cls, name=None):
+        '''Returns the doc string for param ``name`` or the complete docstring
+        if no name is given'''
+        if not name:
+            return cls.__doc__
+
+        return PARAMS[cls][name][NAME_DOC]
+
+    @classmethod
+    def _get(cls, name, prop, **kwargs):
+        '''A param definition can contain additional key:value entries in the the
+        dictionary which are not used by the params machinery.
+
+        The value can be retrieved by calling this method
+
+          - ``name`` - param to query
+          - ``prop`` - name of the property entry in the definition
+          - ``default`` - Optional, **must be a named argument**
+
+            If provided, ``default`` value will be returned if ``prop`` was
+            not in the definition of the parameter ``name``
+
+            If not provided and ``prop`` was not in the param definition a
+            ``KeyError`` exception will be raised
+        '''
+        p = PARAMS[cls][name]
+        if 'default' in kwargs:
+            return p.get(prop, kwargs['default'])  # if no prop return default
+
+        return p[prop]  # Let it raise exception if not preset
+
+    def _reset(self, name=None):
+        '''Reset parameter ``name`` if given, else reset all to the default
+        values'''
+        if name:
+            setattr(self, k, self._defvalue(name))
+        else:
+            for k, v in self._defitems():
+                setattr(self, k, v)
+
+    def _update(self, *args, **kwargs):
+        '''Update the current values of the params with
+
+          - dict-like or other params (passed without expansion as *args)
+          - **kwargs: keywords arguments
+        '''
+        # individual args are dict-like or tuples/lists of pairs
+        for arg in args:
+            try:
+                items = dict(**arg)
+            except TypeError:  # ** not supported
+                items = iter(arg)  # iterable with pairs ((a, b), (c, d)...)
+                # Do this to let other exceptions be raised
+                while True:
+                    try:
+                        k, v = next(items)
+                    except StopIteration:
+                        break
+
+                    setattr(self, k, v)
+            else:
+                for k, v in items.items():
+                    setattr(self, k, v)
+
+        # Now process kwargs (could recurse self._update(kwargs.items()))
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    @classmethod
+    def _argparse(cls, parser, group=None, skip=True, minus=True):
+        '''Autogenerate command line switches for an argparse parser.
+
+        If ``group`` is given (``str``), use it to create a group under which
+        the switches will be added.
+
+        If ``skip`` is ``True``, parameters with a name with an ending
+        ending underscore will be not be added to the command line switches.
+
+        if ``minus`` is ``True``, then ``_`` (underscores) in the param name
+        will be replaced with ``-`` (minus) to improve readability.
+        '''
+        if group:
+            parser = parser.add_argument_group(title=group)
+
+        for p in cls:
+            if skip and p[-1] == '_':
+                continue
+
+            pkwargs = dict(
+                help=cls._doc(p),
+                required=cls._isrequired(p),
+                default=cls._defvalue(p),
+            )
+            if minus:
+                p = p.replace('_', '-')
+
+            parser.add_argument('--' + p, **pkwargs)
+
+    @classmethod
+    def _parseargs(cls, args, skip=True):
+        '''Use an object ``args`` containing parsed arguments and use the values to
+        update the values of the defined parameters
+
+        If ``skip`` is ``True``, parameters with a name with an ending
+        ending underscore will be not be sought in ``args``
+
+        **Note**: There is no need to have a ``minus`` parameter as in the
+        method ``_argparse``, because the ``Argparse`` object automatically
+        replaces ``-`` (minus) with ``_`` (underscore), because the former is
+        not a valid character for Python identifiers.
+        '''
+        updater = {}
+        for p in cls:
+            if skip and p[-1] == '_':
+                continue
+
+            if hasattr(args, p):
+                updater[p] = getattr(args, p)
+
+        return updater
+
+    @classmethod
+    def _create(cls, args, skip=True):
+        '''Use an object ``args`` containing parsed arguments and use the values to
+        update the values of the defined parameters
+
+        If ``skip`` is ``True``, parameters with a name with an ending
+        ending underscore will be not be sought in ``args``
+
+        **Note**: There is no need to have a ``minus`` parameter as in the
+        method ``_argparse``, because the ``Argparse`` object automatically
+        replaces ``-`` (minus) with ``_`` (underscore), because the former is
+        not a valid character for Python identifiers.
+        '''
+        hostcls = CLS[cls]
+        return hostcls(**cls._parseargs(args, skip=skip))
+
+
+class MetaParamsBase(MetaFrame):
+    '''Metaclass or Paramsbase, which cooperates with gathers information
+    during class creation to first dynamically attach subclassess of ``Params``
+    and later instantiate it during the instantiation of the own subclasses
     '''
+    _pname = PARAMS_NAME
+    _pshort = PARAMS_SHORT
 
-    # Holders of information
-    _pdefs = OrderedDict()  # Holds the names / default values pairs of params
-    _pdocs = OrderedDict()  # Holds the names / docs pairs of params
+    def __new__(meta, name, bases, dct, **kwargs):
+        meta._pname = pname = kwargs.get(KWARG_PNAME, meta._pname)
+        meta._pshort = pshort = kwargs.get(KWARG_PSHORT, meta._pshort)
 
-    def __init__(self, kwargs):
-        # NOTE: No error is kwargs and not **kwargs to modify it
-        for pname, pdefault in self._pdefs.items():
-            setattr(self, pname, kwargs.pop(pname, pdefault))
+        cls = super().__new__(meta, name, bases, dct)  # create class
 
-    def __setattr__(self, name, value):
-        '''Only adds items if defined as params or underscored'''
-        if name not in self._pdefs and not name.startswith('_'):
-            raise AttributeError
+        # Collect param info from bases and new definition
+        pbases = [getattr(base, pname, Params) for base in bases]
+        pbases.append(dct.get(pname, {}))
 
-        super(Params, self).__setattr__(name, value)
+        # create params subclass with collected info (and proper name)
+        pclsname = '_'.join((cls.__module__.replace('.', '_'), name, pname))
+        pcls = type(pclsname, (Params,), {}, pbases=pbases)
 
-    def __iter__(self):
-        return iter(self._pdefs)
-
-    @classmethod
-    def _subclass(cls, clsname, newparams, *otherbases):
-        '''Produces a subclass of this class using the given paramerters
-
-        Args:
-            cls: the class which is going to be subclassed
-            clsname (string): Name of the class holding this Params
-            newparams (tuple): 2 or 3 tuples containing the params definitions
-            otherbases (Params subclasses): other basec classes to use
-
-        Returns:
-            A subclass of this class with the new parameters and including
-            those of the other bases
-        '''
-        # Make a copy of the defaults and docs of this class
-        pdefs = cls._pdefs.copy()
-        pdocs = cls._pdocs.copy()
-
-        # Add/Update with the infos from other bases
-        for otherbase in otherbases:
-            pdefs.update(otherbase._pdefs)
-            pdocs.update(otherbase._pdocs)
-
-        # Add/Update with the new params
-        for np in newparams:
-            name, default = np[0:2]
-            doc = np[2] if len(np) > 2 else ''
-
-            pdefs[name] = default
-            if name not in pdocs or doc:
-                # only set if not present or is an update
-                pdocs[name] = doc
-
-        # Dynamically create the new class
-        klsname = str(cls.__name__ + '_' + clsname)
-        newcls = type(klsname, (cls,), {})
-
-        # Add it to a module (needed for pickling support)
-        clsmodule = sys.modules[cls.__module__]
-        setattr(clsmodule, klsname, newcls)
-
-        # Set the attributes in the new subclass
-        newcls._pdefs = pdefs
-        newcls._pdocs = pdocs
-
-        return newcls
-
-    def _reset(self, *args):
-        '''Resets specific parameters (or all) to default values
-
-        Args:
-            *args: names of parameters to reset
-                if no name is given all parameters will be reset
-        '''
-        for pname in args or self._pdefs:
-            setattr(self, pname, self._pdefs[pname])
-
-    def _isdefault(self, pname):
-        '''Returns True if parameter ``pname`` still has the default value'''
-        return getattr(self, pname) == self._pdefs[pname]
-
-    def _value(self, pname):
-        '''Returns the current value for parameter ``pname``'''
-        return getattr(self, pname)
-
-    @classmethod
-    def _default(cls, pname):
-        '''Returns the default value for parameter ``pname``'''
-        return cls._pdefs[pname]
-
-    @classmethod
-    def _doc(cls, pname):
-        '''Returns the documentation for parameter ``pname``'''
-        return cls._pdocs[pname]
-
-    @classmethod
-    def _names(cls):
-        '''Returns a list with the parameter names'''
-        return list(cls._pdefs.keys())
-
-    def _values(self, *names):
-        '''Returns a list with the current parameter values
-
-        If names are given, return for only those requested
-        '''
-        return [getattr(self, x) for x in names or self._pdefs]
-
-    @classmethod
-    def _defaults(cls, *names):
-        '''Returns a list with the default parameter values
-
-        If names are given, return for only those requested
-        '''
-        return [cls._pdefs[x] for x in names or cls._pdefs]
-
-    @classmethod
-    def _docs(cls, *names):
-        '''Returns a list with the parameter documentations
-
-        If names are given, return for only those requested
-        '''
-        return [cls._pdocs[x] for x in names or cls._pdefs]
-
-    def _kwvalues(self, *names):
-        '''Returns an OrderedDict names/current values pairss
-
-        If names are given, return for only those requested
-        '''
-        return OrderedDict(map(lambda x: (x, getattr(self, x)),
-                               names or self._pdefs))
-
-    @classmethod
-    def _kwdefaults(cls, *names):
-        '''Returns an OrderedDict names/default values pairs
-
-        If names are given, return for only those requested
-        '''
-        return OrderedDict(map(lambda x: (x, cls._pdefs[x]),
-                               names or cls._pdefs))
-
-    @classmethod
-    def _kwdocs(cls, *names):
-        '''Returns an OrderedDict names/doc values pairs'''
-        return OrderedDict(map(lambda x: (x, cls._pdocs[x]),
-                               names or cls._pdefs))
-
-
-class MetaParams(MetaFrame):
-    '''Intercepts the creation of a client class looking for a specific
-    attribute definition (matching name to own attribute ``_pname``) which
-    must a be a 2/3-tuple defining the parameters.
-
-    The attribute is removed during class creation and replaced with a subclass
-    of Params. All the bases of the client class are scanned and if any other
-    also contains the attribute it is passed to the subclassing action.
-
-    Instantiation is also intercepted to give the Params subclass the chance to
-    use the ``kwargs`` for initialization and removal of the used names/values.
-
-    During instantiation the Params class in the instance is substituted with
-    the Params instance.
-
-    Attributes:
-        _pname (def: 'params'):
-            Name of the attribute to look for the 2/3 tuples and use to
-            set/store the Params subclasses/instances
-
-        _pshort (def: False):
-            Install a 1-letter alias of the Params instance (if the original
-            name is longer than 1 and respecting a leading underscore if any)
-    '''
-    _pname = 'params'  # Name of the attribute in the client class
-    _pshort = False  # Whether a 1-letter extra-attribute will be added
-
-    @classmethod
-    def as_metaclass(meta, *bases, **kwargs):
-        '''Create a base class with 'this metaclass' as metaclass
-
-        Meant to be used in the definition of classes for Py2/3 syntax equality
-
-        Args:
-            meta: the class itself to be used as metaclass (automatic)
-            *bases (iterable): base classes to apply (can be empty)
-            *kwargs:
-                _pname (def: 'params'):
-                    Name of the attribute to look for the 2/3 tuples and use to
-                    set/store the Params subclasses/instances
-
-                _pshort (def: False):
-                    Install a 1-letter alias of the Params instance (if the
-                    original name is longer than 1 and respecting a leading
-                    underscore if any)
-        '''
-        class metaclass(meta):
-            def __new__(metaklass, name, this_bases, d):
-                mt = meta
-                if kwargs:
-                    # Create a subclass of "meta" (itself really) with the
-                    # given kwargs as the dictionary of the class
-                    mt = type(str('xxxxx'), (meta,), kwargs)
-
-                return mt(name, bases, d)
-
-        return type.__new__(metaclass, str('tmpcls'), (), {})
-
-    def __new__(meta, name, bases, dct):
-        # Remove any params definition from the class dict before creation
-        newparams = dct.pop(meta._pname, tuple())
-
-        # Create the new class - this pulls previously defined "params"
-        cls = super(MetaParams, meta).__new__(meta, name, bases, dct)
-
-        # Pulls base params class
-        baseparams = getattr(cls, cls._pname, Params)
-
-        # get params from extra base classes
-        otherbases = [getattr(x, cls._pname)
-                      for x in bases[1:] if hasattr(x, cls._pname)]
-
-        # Subclass and store the newly derived params class
-        clsparams = baseparams._subclass(name, newparams, *otherbases)
-        setattr(cls, cls._pname, clsparams)
+        # Do the installation in host class
+        CLS[pcls] = cls  # find class using params calss
+        dct[pname] = pcls  # install params class in dict
+        setattr(cls, pname, pcls)  # install params class as class attribute
+        cls.__doc__ = (cls.__doc__ or '') + '\n' + pcls.__doc__  # doc to host
 
         return cls
 
     def _new_do(cls, *args, **kwargs):
         pname = cls._pname
+        params = getattr(cls, pname)(**kwargs)  # create a params instance
 
-        # Create params and set the values from the kwargs
-        paramscls = getattr(cls, pname)
+        kwargs = params._remaining(**kwargs)  # get the params not consumed
 
-        # Create an instance - Note: kwargs can (will) be modified by
-        # the create instance ... because it is passed as kwargs and not
-        # as **kwargs
-        params = paramscls(kwargs)
+        # create class instance with the parameters not consumed by params
+        self, args, kwargs = super()._new_do(*args, **kwargs)
 
-        # Call up the chain to create the object
-        obj, args, kwargs = super(MetaParams, cls)._new_do(*args, **kwargs)
+        setattr(self, pname, params)  # install params instance in instance
+        if cls._pshort and len(pname) > 1:  # install shortcut if requested
+            # respect leading _
+            setattr(self, pname[0:1 + (pname[0] == '_')], params)
 
-        # Put params instance the object instance, obscuring class definition
-        setattr(obj, pname, params)
-
-        # Add a 1-letter alias if requested, respecting 1 leading underscore
-        # Only if more than 1 letter is available (after the underscore)
-        pname_leadunder = pname.startswith('_')
-        if cls._pshort and len(pname) > (1 + pname_leadunder):
-            setattr(obj, pname[0 + pname_leadunder], params)
-
-        return obj, args, kwargs
+        return self, args, kwargs  # return the expected values
 
 
-def metaparams(*args, **kwargs):
-    '''Decorator to make a class "Params"-enabled
-
-    Args:
-        _pname (def: 'params'):
-            Name of the attribute to look for the 2/3 tuples and use to
-            set/store the Params subclasses/instances
-
-        _pshort (def: False):
-            Install a 1-letter alias of the Params instance (if the original
-            name is longer than 1 and respecting a leading underscore if any)
-    '''
-    # done here to support removing the () call with the args checks below
-    # if func defintion had kwargs _pname/_pshort the check would not succeed
-    _pname = kwargs.get('_pname', 'params')
-    _pshort = kwargs.get('_pshort', False)
-
-    def real_decorator(cls):
-
-        # Subclass MetaParams with the passed pname/pshort values
-        metadct = dict(_pname=_pname, _pshort=_pshort)
-        newmeta = type(str('xxxxx'), (MetaParams,), metadct)
-
-        # Extract a 'params' definition from the class if any so it can be
-        # reparsed later during class creation
-        pattr = getattr(cls, _pname, ())
-        if pattr:
-            delattr(cls, _pname)
-
-        # Subclass with the new metaclass from above and the params definition
-        clsdct = {_pname: pattr}
-        newcls = newmeta(cls.__name__, (cls,), clsdct)
-
-        return newcls
-
-    if len(args):
-        # In this case no kwargs are there ... we can kick the real decorator
-        return real_decorator(*args)
-
-    # kwargs are present, go a second round in which the cls is passed in *args
-    return real_decorator
-
-
-class ParamsBase(MetaParams.as_metaclass()):
-    '''
-    Base class with ``MetaParams`` already applied to it.
-
-    Subclasses of this will already be params-enabled with the params attribute
-    name expected to be ``params`` and no short aias defined.
-    '''
+class ParamsBase(metaclass=MetaParamsBase):
+    '''Base class to create subclasses which support the params pattern'''
     pass
-
-
-if __name__ == '__main__':
-
-    class A(ParamsBase):
-        params = (
-            ('juan', 33),
-            ('xx', 5),
-        )
-
-        def __init__(self, **kwargs):
-            print('remaining kwargs', kwargs)
-
-    a = A(xx=52)
-
-    print('kwdefaults', a.xx._kwdefaults())
-    print('kwvalues', a.xx._kwvalues())
