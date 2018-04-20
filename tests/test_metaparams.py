@@ -22,8 +22,9 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 from collections import OrderedDict
+import sys
 
-from metaparams import ParamsBase
+from metaparams import ParamsBase, metaparams
 
 
 def test_run(main=False):
@@ -53,14 +54,25 @@ def test_run(main=False):
     assert check_p2_doc
 
     # Testing keyword arguments
-    class B(ParamsBase, pname='xx', pshort=True):
-        xx = dict(
-            p1=True,
-            p2=dict(value=99, doc='With docstring'),
-        )
+    if sys.version_info[0:2] >= (3, 6):
+        class B(ParamsBase, _pname='xx', _pshort=True):
+            xx = dict(
+                p1=True,
+                p2=dict(value=99, doc='With docstring'),
+            )
 
-        def __init__(self, a1=None):
-            pass
+            def __init__(self, a1=None):
+                pass
+    else:
+        @metaparams(_pname='xx', _pshort=True)
+        class B:
+            xx = dict(
+                p1=True,
+                p2=dict(value=99, doc='With docstring'),
+            )
+
+            def __init__(self, a1=None):
+                pass
 
     b = B(p2=33)
 
