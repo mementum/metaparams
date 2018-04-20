@@ -23,13 +23,15 @@ import sys
 
 from metaframe import MetaFrame, MetaFrameBase
 
-__all__ = ['MetaParams', 'Params', 'MetaParamsBase', 'ParamsBase']
+__all__ = [
+    'metaparams', 'MetaParams', 'Params', 'MetaParamsBase', 'ParamsBase'
+]
 
 PARAMS_NAME = 'params'
 PARAMS_SHORT = True
 
-KWARG_PNAME = 'pname'
-KWARG_PSHORT = 'pshort'
+KWARG_PNAME = '_pname'
+KWARG_PSHORT = '_pshort'
 
 # Names and default values for the dictionary entry defining each parameter
 NAME_VAL = 'value'
@@ -517,3 +519,37 @@ class MetaParamsBase(MetaFrame):
 class ParamsBase(metaclass=MetaParamsBase):
     '''Base class to create subclasses which support the params pattern'''
     pass
+
+
+def metaparams(*args, **kwargs):
+    '''Decorator to make a class "Params"-enabled
+    Args:
+        _pname (def: 'params'):
+            Name of the attribute to look for the 2/3 tuples and use to
+            set/store the Params subclasses/instances
+        _pshort (def: True):
+            Install a 1-letter alias of the Params instance (if the original
+            name is longer than 1 and respecting a leading underscore if any)
+    '''
+    # done here to support removing the () call with the args checks below
+    # if func defintion had kwargs _pname/_pshort the check would not succeed
+    _pname = kwargs.get(KWARG_PNAME, PARAMS_NAME)
+    _pshort = kwargs.get(KWARG_PSHORT, PARAMS_SHORT)
+
+    def real_decorator(cls):
+        # Subclass MetaParamsBase with the passed pname/pshort values
+        metadct = {KWARG_PNAME: _pname, KWARG_PSHORT: _pshort}
+        newmeta = type('xxxxx', (MetaParamsBase,), metadct)
+
+        # Subclass with the new metaclass from above and the params definition
+        newcls = newmeta(cls.__name__, (cls,), {_pname: pattr})
+        mod = sys.modules.get(cls.__module__, None)
+        if mod is not None:  # install in mod (if possible) to make it pickable
+            setattr(mod, cls.__name__, newcls)
+
+        return newcls
+
+    if len(args):  # any non-named arg must be cls and it passed by Python
+        return real_decorator(*args)  # no kwargs ... kick real decorator
+
+    return real_decorator  # kwargs present and processed. Let cls be processed
