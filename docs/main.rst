@@ -1,248 +1,552 @@
-Usage
-#####
+Background
+##########
 
-Params definition
-=================
+When working with classes in Python, class attributes can be used to have
+default values, which can be customized during initialization, such as in::
 
-The definition of params can be done as follows::
+  class A:
+      value1 = 'value1'
+      value2 = 'value2'
 
-  class A(object):
-      params = (
-          ('param1', True, 'This is param1'),  # including doc
-          ('param2', 53,),  # No need for the doc string
-      )
+      def __init__(self, value1='value1', value2='value2'):
+          self.value1 = self.value1
+          self.value2 = self.value2
 
-      def __init__(self, p1=True):
-        self.p1 = p1
+Which can be generalized with the use of ``**kwargs``::
 
-But wait ... this is a regular class not yet params-enabled
+  class A:
+      value1 = 'value1'
+      value2 = 'value2'
 
-Decorator enabling
-==================
+      def __init__(self, **kwargs):
+          for k, v in kwargs.items():
+              if hasattr(self, k):
+                  setattr(self, k, v)
 
-Simply apply the decorator::
+Case in which we have added a restriction to only consider ``**kwargs`` which
+have already been defined in the class. But even with this pattern, some things
+could have room for improvement:
 
-  from metaparams import metaparams
+   - Avoid the manual coding in ``__init__`` (with or without ``**kwawrgs``)
+   - Control the types which are passed
+   - Transform the values if needed
+   - Document the types when they are declared and not in the *docstring*
 
-  @metaparams
-  class A(object):
-      params = (
-          ('param1', True, 'This is param1'),  # including doc
-          ('param2', 53,),  # No need for the doc string
-      )
+One can of course add type hints in the latest Python versions and document the
+parameters in the docstring, but:
 
-      def __init__(self, p1=True):
-        self.p1 = p1
+  - The type hints are just that ... hints
+  - It seems better to document the parameter when it's defined.
+  - There is no way to know (except reading the docs, which sometimes does not
+    exist) if the class needs that the caller provides a value
 
-Et voilá! Of course we still need to make something sensible out of the params::
+And one final caveat:
 
-  a = A(params2=99)
+  - Those attributes which are supposed to be configured via ``__init__`` are
+    not separated from any other attributes in the instances
 
-As simple as that. The eager reader will notice the following:
+The *params* pattern
+####################
 
-  - ``params2`` is not declared in the list ``kwargs`` for :func:`__init__`
+The ``metaparams`` library offers therefore the following pattern::
 
-    And so must it be! The ``metaparams`` magic parses and removes the
-    ``params2`` kwarg before it ever makes it to :func:`__init__` avoiding an
-    error in the calls.
+  import metaparams
 
-If we know queried the value of the params::
+  class A(metaparams.ParamsBase):
+      params = {
+          'value1': {
+              'value': 'value1',
+              'doc': 'This is value1',
+              'required': False,
+              'type': str,
+              'transform': None,
+          },
+          'value2': {
+              'required': True,
+          },
+          'value3': 'value3',
+      }
 
-  print(a.params.param2)
-  >>> 99
+We have provided a full definition for ``value1``, a reduced one for ``value2``
+and just the actual default value is provided for ``value3``
 
-  print(a.params.param1)
-  >>> True
+  - ``value1`` gets documented, gets a default value, is marked as not
+    *required*, must be of type ``str`` and will undergo no *transform*
+    (``None`` is given rather than a transformation function)
 
-Which shows that:
+  - ``value2`` on the other hand is just marked as **required**. If not
+    provided when the host class is instantiated an *Exception* will be raised
 
-  - ``params1`` retains the default define value ``True``
-  - ``params2`` has been changed to the passed kwarg value of ``99``
+    .. note:: Notice that there is no need to provide a default value, because
+              the caller has to actually provide a value.
 
-Of course:
 
-  - ``p1`` which is declared by __init__ as kwarg has been not touched by
-    ``metaparams``
+  - ``value3`` gets a default value. It will not be *required*, has no
+    documentation, no specific type definition and no transform function.
 
-.. note::
-   Params as seen in the code excerpts above are reachable over the construct
-   ``self.params`` which is also the name of the attribute defined during class
-   definition.
 
-   It should be obvious that the ``params`` tuple of tuples has been changed
-   into an object.
+One can now do the following::
 
-Params syntax
--------------
+  a = A(value2=22, value3='this is my value')
+  print(a.params.value1)  # shorthand a.p.value1
+  print(a.params.value2)  # shorthand a.p.value2
+  print(a.params.value3)  # shorthand a.p.value3
 
-The params are defined as a tuple of tuples. Of course being this Python it can
-be a list of tuples, a tuple of lists and actually any iterable of
-iterables. The interior tuples contain the following fields:
+which prints::
 
-  - 1st item: param name
-  - 2nd item: param default value
-  - 3rd item (optional): param documentation (empty if not provided)
+  value1
+  22
+  this is my value
 
-    Inheritance has not yet been visited, but if a param doc is changed
-    during inheritance it will take over the original definition of the base class
 
+Notice that we **haven't defined ``__init__``** and yet ``value2`` and
+``value3`` have received the values passed to the class instance. This because
+behind the scenes the following has happened:
 
-Using your own ``params`` name
-------------------------------
+  - The ``params`` definition (a ``dict``) has been turned dynamically into a
+    subclass of ``metaparams.Params``
 
-The ``metaparams`` decorator accepts 2 parameters:
+  - When ``A`` is instantiated into ``a``, the ``Params`` subclass is also
+    instantiated, intercepts the ``**kwargs`` and uses the values and is
+    installed in the class instance.
 
-  - ``_pname`` (def 'params'): Name of the attribute to look for the 2/3 tuples
-    and use to set/store the Params subclasses/instances
+  - There is therefore a Class-Class and Instance-Instance duality in that:
 
-  - ``_pshort`` (def: False): Install a 1-letter alias of the Params instance (if
-    the original name is longer than 1 and respecting a leading underscore if
-    any)
+    - ``A``, a class, has a ``params`` attribute which is a subclass of
+      ``metaparams.Params``
 
-The following can therefore be done::
+    - ``a``, an instance, has a ``params`` attribute which is an instance of
+      ``A.params``
 
-  from metaparams import metaparams
+    This is possible because in Python, attributes at instance level obscure
+    the definition at class level (without overwriting it)
 
-  @metaparams(_pname='_kargs', _pshort=True)
-  class A(object):
-      _kargs = (
-          ('param1', True, 'This is param1'),  # including doc
-          ('param2', 53,),  # No need for the doc string
-      )
 
-      def __init__(self, p1=True):
-        self.p1 = p1
+One can still define ``__init__`` and even have extra ``**kwargs`` passed to
+it::
 
-Notice how the ``params`` definition uses now the name ``_kargs`` as indicated
-in the decorator (else the params would not be recognized).
+  import metaparams
 
-Instantiating now::
+  class A(metaparams.ParamsBase):
+      params = {
+          'value1': {
+              'value': 'value1',
+              'doc': 'This is value1',
+              'required': False,
+              'type': str,
+              'transform': None,
+          },
+          'value2': {
+              'required': True,
+          },
+          'value3': 'value3',
+      }
 
-  a = A(param2=99)
+      def __init__(self, **kwargs):
+          print('Extra **kwargs:', kwargs)
 
-  print(a._kargs.param2)
-  >>> 99
+And then do::
 
-  print(a._k.param2)
-  >>> 99
+  a = A(value2=22, some_extra_kw='hello')
 
-Mission accomplished:
+which prints::
 
-  - Changed the name by which we can reach the params to ``_kargs``
+  Extra **kwargs: {'some_extra_kw': 'hello'}
 
-  - Have a shorter alias (helping hand for PEP-8) ``_k``
 
+Required parameters
+*******************
 
-Inheritance
------------
+Let's see what happens when a *required* parameter (``value2`` in our examples)
+is not provided during instantiation::
 
-Yes, we can also do that::
+  a = A(value1='only value1')
 
-  class B(A):
-    pass
 
-It has inherited the params, but this would be so boring ... let's redo it::
+And the error is::
 
-  class B(A):
-      params = (
-          ('param2', 99),  # updating the existing param2
-          ('newparam', None),
-      )
+  ...
+      a = A(value1='only value1')
+  ...
+      raise ValueError(errmsg)
+  ValueError: Missing value for required parameter "value2" in parameters "__main___A_params"
 
-Instantiating and testing::
+The raised exception is ``ValueError``, because no value has been provided, is
+raised to let the caller know that ``value2`` has to be supplied.
 
-  b = B()
+.. note:: The name auto-magically assigned to the dynamically created
+          parameters class tries to be descriptive and let us know where things
+          are. In this case the name is ``__main___A_params``, i.e.:
 
-  print(b._kargs.param2)
-  >>> 99
-  print(b._kargs.param1)
-  >>> True
-  print(b._kargs.newparam)
-  >>> None
+            - Module ``__main__``
+            - Inside Class ``A``
 
+          A complete *traceback* will of course also point out in which file
+          and line the error has kicked in
 
-Querying the params
--------------------
+Type Checking
+*************
 
-One of the usual use cases is finding out if a param still has the default value
-or it has been changed. Yes, we can::
+We already have a *type* specified for ``value1`` which is ``str``. Let's see
+what happens if we pass a ``float``::
 
-  print(self.params._isdefault('params1')
-  >>> True
+  a = A(value2=45, value1=22.0)
 
-  print(self.params._isdefault('params2')
-  >>> False
+The result::
 
-The ``params`` object contains some other useful functions to retrieve the
-names, default values, docs and dictionaries of names/values, names/docs. Check
-the reference.
+  ...
+      a = A(value2=45, value1=22.0)
+  ...
+      raise TypeError(errmsg)
+  TypeError: Wrong type "<class 'float'>" for param "value1" with type <class 'str'> in parameters "__main___A_params"
 
-MetaClass-wise
-==============
 
-Applying the ``metaparams`` metaclass: ``MetaParams`` as the metaclass of your
-classes. It can easily be done with the included classmethod ``as_metaclass``.
+A ``TypeError`` (obviously) is raised if the passed value is not of the type defined for
+the parameter.
 
-Let's metaclass it::
+Transformation
+**************
 
-  from metaparams import MetaParams
+In the examples above we have only shown the definition with::
 
-  class A(MetaParams.as_metaclass(object)):
+  transform=None
 
-      params = (
-          ('param1', True, 'This is param1'),  # including doc
-          ('param2', 53,),  # No need for the doc string
-      )
+as one of the components of a parameter. ``None`` is there to indicate that
+nothing has to be done. Let's change that to see how things work::
 
-      def __init__(self, p1=True):
-        self.p1 = p1
+  import metaparams
 
+  class A(metaparams.ParamsBase):
+      params = {
+          'value1': {
+              'value': 'value1',
+              'doc': 'This is value1',
+              'required': False,
+              'type': str,
+              'transform': lambda x: x.upper(),
+          },
+          'value2': {
+              'required': True,
+          },
+          'value3': 'value3',
+      }
 
-Just like with the decorator you can use kwargs with ``as_metaclass`` to
-customize the parameters::
+  a = A(value1='hello', value2='no value 2')  # supply required value2
+  print('a.params.value1:', a.params.value1)
 
-  from metaparams import MetaParams
+In the ``transform`` we can be sure that we can apply ``x.upper()`` because we
+are requiring that the type be ``str``.
 
-  class A(MetaParams.as_metaclass(object, _pname='_kargs', _pshort=True)):
+The outcome::
 
-      _kargs = (
-          ('param1', True, 'This is param1'),  # including doc
-          ('param2', 53,),  # No need for the doc string
-      )
+  a.params.value1: HELLO
 
-      def __init__(self, p1=True):
-        self.p1 = p1
+which shows our input value ``hello`` in uppercase form.
 
-And now even the short alias ``_k`` would be available.
+Auto-Documentation
+******************
 
+One of the reasons to go into this, is to document the parameter when it is
+being defined. In the above examples this is being done for ``value1``. And the
+magic behind the scenes makes it possible that the following is true::
 
-You may directly subclass ``MetaParams`` before applying it to change the name
-of the ``params`` atribute::
+  print(A.__doc__)  # print the docstring
 
-  from metaparams import MetaParams
+which results in the following output::
 
-  class MyMetaParams(MetaParams):
-    _pname = '_kargs'
-    _pshort = True
+  Args
 
-And then apply it to your desired classes.
+    - value1: (default: value1) (required: False) (type: <class 'str'>) (transform: None)
+      This is value1
 
+    - value2: (default: None) (required: True) (type: None) (transform: None)
 
-ParamsBase subclassing
-======================
+    - value3: (default: value3) (required: False) (type: None) (transform: None)
 
-Simply import ``ParamsBase`` and subclass from it::
+The parameters have auto-documented themselves in the host class, which means
+that they will for example be part of auto-generated documentation when using,
+for example, *Sphinx*
 
-  from metaparams import ParamsBase
 
-  class A(ParamsBase):
-      params = (
-          ('param1', True, 'This is param1'),  # including doc
-          ('param2', 53,),  # No need for the doc string
-      )
+Where the presence of a ``bool`` or a ``str`` will determine if the third value
+is the doc string or the ``required`` indication.
 
-      def __init__(self, p1=True):
-        self.p1 = p1
+argparse integration
+####################
 
-In this case you cannot change the name ``params`` or the addition of the
-shorter alias.
+The *params* pattern can be used to dynamically generate command line options
+with the ``argparse`` module, i.e.: adding new definitions to the ``params`` of
+a class will add new command line switches to match those definitions.
+
+**Generation of the command line switches**
+::
+
+    import argparse
+    from metaparams import ParamsBase
+
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description=(
+            'Some script with auto-generated command line switches '
+        )
+    )
+
+    class A(ParamsBase):
+      params = {
+          'value1': {
+              'value': 'value1',
+              'doc': 'This is value1',
+              'required': False,
+              'type': str,
+              'transform': None,
+          },
+          'value2': {
+              'required': True,
+          },
+          'value3': 'value3',
+      }
+
+
+    # The integration of the params in the command line switches
+    A.params._argparse(parser)
+
+
+**Use of the paramters for instantiation**
+::
+    args = parser.parse_args()
+
+    # The integration of command line switches values for instantiation
+    a = A(**A.params._parseargs(args))
+
+Or even simpler::
+
+    args = parser.parse_args()
+
+    # The integration of command line switches values for instantiation
+    a = A.params._create(args)
+
+
+The API
+#######
+
+The parameter values, as shown above, can be accessed with ``.`` (dot)
+notation, but there is a lot more that can be done. All methods have been
+prefixed with a leading underscore (``_``) to avoid collision with parameter
+names the end user could choose.
+
+Notice the following relationship *class-class* and *instance-instance*
+
+  - ``A.params`` - Here ``A`` is the host class holding parameters, and
+    ``A.params`` is a parameter class (dynamically generated)
+
+
+  - ``a.params`` - Here ``a`` is an instance of ``A`` and ``a.params`` is an
+    instance of ``A.params``
+
+Customization
+*************
+
+Per default parameters are defined with the name ``params`` in the host
+class::
+
+      class A(Paramsbase):
+
+          params = {
+              ...
+          }
+
+And are reachable in the instance of the host class as either::
+
+      a = A()
+
+      a.params
+
+      # 1st letter of the name params. If the name had a leading underscore
+      # such as _params, the shortcut would be _p
+      a.p
+
+The name ``params`` and the creation of the shorthand ``p`` can be
+customized when ``Paramsbase`` is subclassed using keyword arguments::
+
+      class A_poroms(Paramsbase, pname='poroms', pshort=False)
+          poroms = {
+              ...
+          }
+
+In this case:
+
+  - The parameters are defined and are reachable under the name ``poroms``
+
+  - No shortcut ``p`` is created
+
+Another example::
+
+      class A_poroms(Paramsbase, pname='_xarams')
+          _xarams = {
+              ...
+          }
+
+And now
+
+  - Parameters are reachable under the name ``_xarams``
+
+  - A shortcut will be created with ``_x``
+
+The features
+************
+
+A parameter can be canonically defined (as already seen above) in 3 different
+ways.
+
+  - Using a ``name: value`` entry in the ``params`` dictionary. Such as::
+
+      params = {
+          'myparam1': 'myvalue1',
+      }
+
+    This will be internally translated to a full ``dict`` entry as specified
+    below
+
+  - Using a complete ```dict`` entry for the param::
+
+      params = {
+          'myparam1': {
+              # Default value for the parameter (default: None)
+              'value': 'myvalue1',
+              # if param is required for host instantiation (default: False)
+              'required': False,
+              # Document the param (default: '')
+              'doc': 'my documentation',
+               # Check if given type is passed (default: None)
+              'type': str,
+              # Transform given parameter with function (default: None)
+              'transform': lambda x: x.upper(),
+              # If params should be part of argparse integration (default: True)
+              'argparse': True,
+      }
+
+**Note**: If the name of a parameter ends with ``_`` it will be automatically
+excluded from ``argparse`` integration
+
+Using iterables
+===============
+
+The *params* can also be specified as iterables (*list/tuple*) of iterables
+(*list/tuple*) with the following notation (elements in between square brackets
+are optional::
+
+  params = (
+      (name, value, [doc, [required, [type, [transform, [argparse]]]]]),
+      (name1, value1, [doc1, [required1, [type1, [transform1, [argparse1]]]]]),
+      ...
+  )
+
+Or::
+
+  params = (
+      (name, value, [required, [doc, [type, [transform, [argparse]]]]]),
+      (name1, value1, [required1, [doc1, [type1, [transform1, [argparse1]]]]]),
+      ...
+  )
+
+
+The methods
+***********
+
+This is a list of the supported methods and features:
+
+  - Operator ``[name]`` - To access the current parameter value applied to
+    the class or instance of the parameters
+
+  - ``len(self.params)`` gives the number of defined parameters
+
+  - Iteration is supported: ``[x for x in self.params]`` or
+    ``iter(self.params)`` will give you access to the parameter names
+
+    The pattern can be applied to the class or the instance of the parameters.
+
+**Defaults** (can be applied to the parameters class or instance)
+
+  - ``def _defkwargs()`` - returns a ``dict`` with *name/value* pairs
+    where the values are the default values and not the current ones
+
+  - ``def _defitems()`` - returns an iterable with *name/value* pairs
+    where the values are the default values and not the current ones
+
+  - ``def _defkeys()`` - returns an iterable with the parameter *names*
+    This is really an oxymoron because the names cannot be changed.
+
+  - ``def _defvalues()`` - returns an iterable with the default
+      parameter *values*
+
+  - ``def _defvalue(name)`` - returns the default value for *name*
+
+  - ``def _isrequired(name)`` - returns ``True`` if the parameter name
+    has to be specified during the instantiation of host class instances
+
+  - ``def _doc(name=None)`` - returns the doc string for *name* if
+    given or else return the autogenerated docstring for all parameters which
+    is automatically added to the host class
+
+  - ``def _get(name, prop)`` - returns a specific property ``prop`` for the
+    param ``name``. Example: to get the doc string use::
+
+      ``_get(param_name, 'doc')``
+
+**Current values** (can be applied to the parameters instance)
+
+  - ``def _update(x)`` - Update the value of the parameters with a
+    dict-like object or an iterable of pairs *name/value*
+
+  - ``def _update(**kwargs)`` - Update the value of the parameters with
+    the given keyword arguments
+
+  - ``def _reset(name=None)`` - Reset either an individual parameter if
+    *name* to its default value is given or reset all parameters to the default
+    values if no *name* is provided
+
+  - ``def _kwargs()`` - returns a ``dict`` with *name/value* pairs
+    where the values are the current ones
+
+  - ``def _items()`` - returns an iterable with *name/value* pairs
+    where the values are the current ones
+
+  - ``def _keys()`` - returns an iterable with the parameter *names*
+
+  - ``def _values()`` - returns an iterable with the parameter *values*
+
+  - ``def _value(name)`` - returns the current value for *name*
+
+  - ``def _isdefault(name)`` - returns ``True`` if the value is the
+    default one
+
+**Argparse integration** (intended to be used as classmethod)
+
+  - ``def _argparse(parser, group=None, skip=True, minus=True)``
+
+    Integrate params in the given ``parser``
+
+      - ``group``: If a string is passed, the params will be put inside a group
+        with that name
+
+      - ``skip``: If ``True``, any param with a name ending in ``_`` will be
+        ignored
+
+      - ``minus``: If ``True``, underscores will be translated to ``-`` (minus)
+        signs for the options in ``argparse`` (the module does automatically
+        translate them backwards to ``_`` in member attributes)
+
+  - ``def _parseargs(args, skip=True)``
+
+    Use the already parsed ``args`` to assign value to the params
+
+      - ``skip``: If ``True``, any param with a name ending in ``_`` will be
+        ignored
+
+  - ``def _create(args, skip=True)``
+
+    Using the given *argparse* ``args`` object create an instance of the host
+    class holding this params
+
+      - ``skip``: If ``True``, any param with a name ending in ``_`` will be
+        ignored
