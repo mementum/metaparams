@@ -61,7 +61,7 @@ CLS = {}
 class MetaParams(type):
     def __new__(meta, name, bases, dct, **kwargs):
         # Normalize the info passed by the parent classes of the host
-        pbases = kwargs.get('pbases', [{}])
+        pbases = dct.pop('pbases', [{}])
 
         pdct = {}  # params dictionary for class creation
         for pbase in pbases[:-1]:  # all bases definitions except last (new)
@@ -487,7 +487,7 @@ class MetaParamsBase(MetaFrame):
 
         # create params subclass with collected info (and proper name)
         pclsname = '_'.join((cls.__module__.replace('.', '_'), name, pname))
-        pcls = type(pclsname, (Params,), {}, pbases=pbases)
+        pcls = type(pclsname, (Params,), {'pbases': pbases})
 
         # Do the installation in host class
         CLS[pcls] = cls  # find class using params calss
