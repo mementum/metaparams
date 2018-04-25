@@ -19,5 +19,4 @@
 #
 ###############################################################################
 from .version import __version__
-from .metaparams import (metaparams, MetaParams, Params, MetaParamsBase,
-                         ParamsBase)
+from .metaparams import metaparams, MetaParams, Params, ParamsBase

@@ -18,20 +18,25 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ###############################################################################
+import collections
 import textwrap
 import sys
 
 from metaframe import MetaFrame, MetaFrameBase
 
-__all__ = [
-    'metaparams', 'MetaParams', 'Params', 'MetaParamsBase', 'ParamsBase'
-]
+__all__ = ['metaparams', 'MetaParams', 'Params', 'ParamsBase']
 
-PARAMS_NAME = 'params'
-PARAMS_SHORT = True
+# Keyword arguments for class definition (or for the decorator)
+KWARG_PNAME = '_pname'  # name the params class will have in the host class
+PARAM_NAME = 'params'
+_ERROR_NAME = 'Params defined in base class : "{}" - cannot rename to "{}"'
+_ERROR_NAMES = 'Multiple base clases with different params definitions: "{}"'
 
-KWARG_PNAME = '_pname'
-KWARG_PSHORT = '_pshort'
+KWARG_PSHORT = '_pshort'  # if a shorthand params -> p  will be set in host
+PARAM_SHORT = True
+
+KWARG_PINST = '_pinst'  # if a p.name -> p_name attr will be set in the host
+PARAM_INST = False
 
 # Names and default values for the dictionary entry defining each parameter
 NAME_VAL = 'value'
@@ -47,6 +52,7 @@ VALUE_TRANSFORM = None
 NAME_ARGPARSE = 'argparse'
 VALUE_ARGPARSE = True
 
+# Default order expected for params when defined using tuples
 TUPLE_NAME_ORDER = (NAME_VAL, NAME_REQUIRED, NAME_DOC, NAME_TYPE,
                     NAME_TRANSFORM, NAME_ARGPARSE)
 
@@ -58,9 +64,10 @@ NAME_DOCARGS = 'Args'
 PARAMS = {}  # keeps the complete definition or a param
 DEFAULTS = {}  # keeps params names and default values
 CLS = {}
+PSETTING = collections.defaultdict(dict)
 
 
-class MetaParams(type):
+class ParamsMeta(type):
     def __new__(meta, name, bases, dct, **kwargs):
         # Normalize the info passed by the parent classes of the host
         pbases = dct.pop('pbases', [{}])
@@ -75,15 +82,14 @@ class MetaParams(type):
                 if k in pdct:  # other base(s) have added/update the key before
                     pdct[k].update(pbasedct[k])
                 else:
-                    pdct[k] = pbasedct[k]  # set it for the 1st eim
+                    pdct[k] = pbasedct[k]  # set it for the 1st element
 
         nparams = pbases[-1]  # last is new declaration
         if not isinstance(nparams, dict):  # support non-dict declaration
             # (name, val, [doc, [required, [type, [transform, [argparse]]]]])
             # or
             # (name, val, [required, [doc, [type, [transform, [argparse]]]]])
-
-            ndct = OrderedDict()  # to hold a complete definition in dict form
+            ndct = {}  # to hold a complete definition in dict form
 
             # Generate dict entries for each parameter in the tuple definition
             for np in nparams:
@@ -202,14 +208,15 @@ class MetaParams(type):
         return str(PARAMS[cls])
 
 
-class Params(metaclass=MetaParams):
+# Error messages for exceptions raised during instantiation
+_ERR_REQ = 'Required parameter "{}" in params "{}" not provided'
+_ERR_TYPE = 'Wrong type "{}" for param "{}" / type "{}" in params "{}"'
+_ERR_TR = 'Error transforming param "{}" with value "{}" in params "{}"'
+
+
+class Params(metaclass=ParamsMeta):
     # Intended to generate subclasses dynamically for ParamsBase subclasses
     __slots__ = []  # params are declared once. no other attributes allowed
-
-    # Error messages for exceptions raised during instantiation
-    _ERR_REQ = 'Required parameter "{}" in params "{}" not provided'
-    _ERR_TYPE = 'Wrong type "{}" for param "{}" / type "{}" in params "{}"'
-    _ERR_TR = 'Error transforming param "{}" with value "{}" in params "{}"'
 
     # The parameters are expressed as dictionaries. The entries are either
     # key: val
@@ -223,7 +230,7 @@ class Params(metaclass=MetaParams):
             if name not in kwargs:
                 # name is not provided, check if it's a required parameter
                 if val[NAME_REQUIRED]:
-                    errmsg = self._ERR_REQ.format(name, clsname)
+                    errmsg = _ERR_REQ.format(name, clsname)
                     raise ValueError(errmsg)
 
                 # Not provided, not required, use the default value
@@ -234,7 +241,7 @@ class Params(metaclass=MetaParams):
                 # See if type check is needed
                 t = val[NAME_TYPE]
                 if t and not isinstance(v, t):
-                    errmsg = self._ERR_TYPE.format(type(v), name, t, clsname)
+                    errmsg = _ERR_TYPE.format(type(v), name, t, clsname)
                     raise TypeError(errmsg)
 
                 # Check if transformation is needed and apply it
@@ -243,7 +250,7 @@ class Params(metaclass=MetaParams):
                     try:
                         v = tr(v)
                     except Exception as e:
-                        errmsg = self._ERR_TR.format(name, v, clsname)
+                        errmsg = _ERR_TR.format(name, v, clsname)
                         raise ValueError(errmsg)
 
                 # everything worked out, set the parameter
@@ -469,38 +476,97 @@ class Params(metaclass=MetaParams):
         return hostcls(**cls._parseargs(args, skip=skip))
 
 
-class MetaParamsBase(MetaFrame):
+class MetaParams(MetaFrame):
     '''Metaclass or Paramsbase, which cooperates with gathers information
     during class creation to first dynamically attach subclassess of ``Params``
     and later instantiate it during the instantiation of the own subclasses
     '''
-    _pname = PARAMS_NAME
-    _pshort = PARAMS_SHORT
 
     def __new__(meta, name, bases, dct, **kwargs):
-        meta._pname = pname = kwargs.get(KWARG_PNAME, meta._pname)
-        meta._pshort = pshort = kwargs.get(KWARG_PSHORT, meta._pshort)
+        # In Python >= 3.6, kwargs can be specified for a class definition
+        # Else if the decorator is used the dynamic created sub-metaclass will
+        # have the above attributes set via a dictionary and kwargs will be
+        # empty. Hence the kwargs.get(name, class_attribute) notation which
+        # tries first to get it from kwargs and defaults to the class attribute
+        # if not found
+        bcls = []
+        if hasattr(meta, KWARG_PNAME):  # decorator meta for leftmost base
+            pname = getattr(meta, KWARG_PNAME)
+            pshort = getattr(meta, KWARG_PSHORT)
+            pinst = getattr(meta, KWARG_PINST)
+        elif bases:
+            bcls = [b for b in bases if b in PSETTING]  # get bases with params
+
+            if bcls:  # bases with params exist
+                bpnames = [PSETTING[b][KWARG_PNAME] for b in bcls]
+                bpset = set(bpnames)
+                if len(bpset) > 1:  # more than 1 name defined
+                    raise NameError(_ERROR_NAMES.format(','.join(bpnames)))
+
+                # get leftmost base and defined name (there is 1 in the set)
+                b, pnamedef = bcls[0], bpset.pop()
+            else:
+                b, pnamedef = None, PARAM_NAME  # no params base, use defaults
+
+            # Get what would be wished name or default
+            pname = kwargs.get(KWARG_PNAME, pnamedef)
+            if pname != pnamedef:  # collission from base and kwargs
+                raise NameError(_ERROR_NAME.format(pnamedef, pname))
+
+            # Get the defaults from the base class if any or global defs
+            # override if the class declaration says something else
+            pshortdef = PSETTING[b].get(KWARG_PSHORT, PARAM_SHORT)
+            pshort = kwargs.get(KWARG_PSHORT, pshortdef)
+
+            pinstdef = PSETTING[b].get(KWARG_PINST, PARAM_INST)
+            pinst = kwargs.get(KWARG_PINST, pinstdef)
+
+        else:  # no bases defined, used provided kwargs or defaults
+            pname = kwargs.get(KWARG_PNAME, PARAM_NAME)
+            pshort = kwargs.get(KWARG_PSHORT, PARAM_SHORT)
+            pinst = kwargs.get(KWARG_PSHORT, PARAM_INST)
+
+        pbases = []  # collect params definitions from bases
+        for b in bases:
+            bpattr = getattr(b, pname, object)
+            try:
+                if not issubclass(bpattr, (Params, dict)):
+                    continue
+            except TypeError:  # bpattr is not a class (also for None Py < 3.6)
+                continue
+
+            pbases.append(bpattr)
+
+        pbases.append(dct.get(pname, {}))  # collect new definition
+
+        modname = dct.get('__module__', '').replace('.', '_')
+        pclsname = '_'.join((modname, name, pname))
+        pcls = type(pclsname, (Params,), {'pbases': pbases})
+        dct[pname] = pcls
+
+        # Update documentation
+        doc = dct.get('__doc__', None) or ''
+        dct['__doc__'] = doc + '\n' + pcls.__doc__  # doc to host
 
         cls = super().__new__(meta, name, bases, dct)  # create class
 
-        # Collect param info from bases and new definition
-        pbases = [getattr(base, pname, Params) for base in bases]
-        pbases.append(dct.get(pname, {}))
+        # Keep actual settings in register for new class
+        PSETTING[cls][KWARG_PNAME] = pname
+        PSETTING[cls][KWARG_PSHORT] = pshort
+        PSETTING[cls][KWARG_PINST] = pinst
 
-        # create params subclass with collected info (and proper name)
-        pclsname = '_'.join((cls.__module__.replace('.', '_'), name, pname))
-        pcls = type(pclsname, (Params,), {'pbases': pbases})
+        CLS[pcls] = cls  # reverse binding to host class
 
-        # Do the installation in host class
-        CLS[pcls] = cls  # find class using params calss
-        dct[pname] = pcls  # install params class in dict
-        setattr(cls, pname, pcls)  # install params class as class attribute
-        cls.__doc__ = (cls.__doc__ or '') + '\n' + pcls.__doc__  # doc to host
+        # pclsname = '_'.join((cls.__module__.replace('.', '_'), name, pname))
+        # setattr(cls, pname, pcls)  # install params class as class attribute
 
         return cls
 
     def _new_do(cls, *args, **kwargs):
-        pname = cls._pname
+        pname = PSETTING[cls][KWARG_PNAME]
+        pshort = PSETTING[cls][KWARG_PSHORT]
+        pinst = PSETTING[cls][KWARG_PINST]
+
         params = getattr(cls, pname)(**kwargs)  # create a params instance
 
         kwargs = params._remaining(**kwargs)  # get the params not consumed
@@ -509,14 +575,19 @@ class MetaParamsBase(MetaFrame):
         self, args, kwargs = super()._new_do(*args, **kwargs)
 
         setattr(self, pname, params)  # install params instance in instance
-        if cls._pshort and len(pname) > 1:  # install shortcut if requested
+        if pshort and len(pname) > 1:  # install shortcut if requested
             # respect leading _
-            setattr(self, pname[0:1 + (pname[0] == '_')], params)
+            shortname = pname[0:1 + (pname[0] == '_')]
+            setattr(self, shortname, params)
+
+        if pinst and pshort:
+            for p, v in params._items():
+                setattr(self, '{}_{}'.format(shortname, p), v)
 
         return self, args, kwargs  # return the expected values
 
 
-class ParamsBase(metaclass=MetaParamsBase):
+class ParamsBase(metaclass=MetaParams):
     '''Base class to create subclasses which support the params pattern'''
     pass
 
@@ -533,13 +604,18 @@ def metaparams(*args, **kwargs):
     '''
     # done here to support removing the () call with the args checks below
     # if func defintion had kwargs _pname/_pshort the check would not succeed
-    _pname = kwargs.get(KWARG_PNAME, PARAMS_NAME)
-    _pshort = kwargs.get(KWARG_PSHORT, PARAMS_SHORT)
+    _pname = kwargs.get(KWARG_PNAME, PARAM_NAME)
+    _pshort = kwargs.get(KWARG_PSHORT, PARAM_SHORT)
+    _pinst = kwargs.get(KWARG_PINST, PARAM_INST)
 
     def real_decorator(cls):
         # Subclass MetaParamsBase with the passed pname/pshort values
-        metadct = {KWARG_PNAME: _pname, KWARG_PSHORT: _pshort}
-        newmeta = type('xxxxx', (MetaParamsBase,), metadct)
+        metadct = {
+            KWARG_PNAME: _pname,
+            KWARG_PSHORT: _pshort,
+            KWARG_PINST: _pinst,
+        }
+        newmeta = type('xxxxx', (MetaParams,), metadct)
         # Remove any params definition and let it be parsed by the subclass
         pattr = getattr(cls, _pname, {})
         if pattr:

@@ -310,9 +310,9 @@ a class will add new command line switches to match those definitions.
     # The integration of the params in the command line switches
     A.params._argparse(parser)
 
-
 **Use of the paramters for instantiation**
 ::
+
     args = parser.parse_args()
 
     # The integration of command line switches values for instantiation
@@ -324,7 +324,6 @@ Or even simpler::
 
     # The integration of command line switches values for instantiation
     a = A.params._create(args)
-
 
 The API
 #######
@@ -366,9 +365,35 @@ And are reachable in the instance of the host class as either::
       a.p
 
 The name ``params`` and the creation of the shorthand ``p`` can be
-customized when ``Paramsbase`` is subclassed using keyword arguments::
+customized when ``Paramsbase`` is subclassed using keyword arguments for ``Python
+>= 3.6``::
 
-      class A_poroms(Paramsbase, pname='poroms', pshort=False)
+      from metaparams import MetaParams
+
+      class A_poroms(metaclass=MetaParams, _pname='poroms', _pshort=False)
+          poroms = {
+              ...
+          }
+
+.. note::
+
+   Notice how instead of subclassing from ``ParamsBase``, when changing the
+   *name* of the params, this has to be specified using
+   ``metaclass=MetaParams``
+
+   This is because ``ParamsBase`` has already defined a fixed name ``params``
+   for the declaration and this is already set for any subclass. The reason
+   being that class attributes (not to be confused with instance attributes)
+   cannot be deleted. Overriding the name for the params declaration would lead
+   to multiplicity of params class attributes in the host class
+
+If using ``Python < 3.6``, use the decorator, because no keyword arguments are
+supported durint class creation::
+
+      from metaparams import metaparams
+
+      @metaparams(_pname='poroms', _pshort=False)
+      class A_poroms:
           poroms = {
               ...
           }
@@ -381,7 +406,17 @@ In this case:
 
 Another example::
 
-      class A_poroms(Paramsbase, pname='_xarams')
+      class A_poroms(Paramsbase, _pname='_xarams')
+          _xarams = {
+              ...
+          }
+
+or::
+
+      from metaparams import metaparams
+
+      @metaparams(_pname='_xarams')
+      class A_poroms:
           _xarams = {
               ...
           }
@@ -449,6 +484,52 @@ Or::
       ...
   )
 
+.. note:: This is provided as a backwards compatibility to the original
+          supported declaration in the previous versions of ``metaparams``. It
+          is actually recommended **not** to use it.
+
+Customization
+*************
+
+The following keyword arguments are accepted by a class definition (Python >=
+3.6) or by the decorator.
+
+  - ``_pname`` (default: ``params``)
+
+    This defines the main name for the declaration and attribute for accessing
+    the declaredp parameters.
+
+    .. note:: If one of the base classes (such as ``ParamsBase``) has already
+              set this name, it cannot be overriden by subclasses.
+
+  - ``_pshort`` (default: ``True``)
+
+    Provide a 1-letter shorthand of the name defined in ``_pname`` in the
+    instance of the host class holding the params. For example: ``params`` will
+    also be installed as ``p``.
+
+    If the defined name has a leading ``_`` (underscore) it will respected and
+    the next charater will be also taken. For example: ``_myparams`` will be
+    shortened to ``_m``
+
+  - ``_pinst`` (default: ``False``)
+
+    Only valid in combination with ``_pshort = True``. Install an instance
+    attribute using the shortened notation, an ``_`` (underscore) and the name
+    of the parameter.
+
+    If a params declaration looks like this::
+
+      class A(ParamsBase, _pinst=True):
+          params = {
+              'myparam': True,
+          }
+
+    The following will be true in an instance of ``A``::
+
+      a = A()
+
+      assert(a.params.myparam == a.p_myparam)
 
 The methods
 ***********

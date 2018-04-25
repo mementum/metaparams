@@ -24,7 +24,10 @@ from __future__ import (absolute_import, division, print_function,
 from collections import OrderedDict
 import sys
 
-from metaparams import ParamsBase, metaparams
+from metaparams import ParamsBase, metaparams, MetaParams
+
+
+py36 = sys.version_info[0:2] >= (3, 6)
 
 
 def test_run(main=False):
@@ -54,9 +57,10 @@ def test_run(main=False):
     assert check_p2_doc
 
     # Testing keyword arguments
-    if sys.version_info[0:2] >= (3, 6):
-        class B(ParamsBase, _pname='xx', _pshort=True):
+    if py36:
+        class B(metaclass=MetaParams, _pname='xx', _pshort=True):
             xx = dict(
+                # a=True,
                 p1=True,
                 p2=dict(value=99, doc='With docstring'),
             )
@@ -67,6 +71,7 @@ def test_run(main=False):
         @metaparams(_pname='xx', _pshort=True)
         class B:
             xx = dict(
+                # a=True,
                 p1=True,
                 p2=dict(value=99, doc='With docstring'),
             )
@@ -93,7 +98,6 @@ def test_run(main=False):
 
     # Testing inheritance
     class C(B):
-
         xx = dict(
             p1=False,
             p3=dict(value=None, doc='None here'),
@@ -144,7 +148,9 @@ def test_run(main=False):
     check_p4_required = C.xx._isrequired('p4')
     check_p5_notrequired = not C.xx._isrequired('p5')
 
-    check_items = list(c.xx._items()) == [
+    # Need to sort because dict order is not guaranteed in Python < 3.7
+    # (guaranteed as implementation detail in CPython 3.6)
+    check_items = sorted(list(c.xx._items())) == [
         ('p1', False), ('p2', 99), ('p3', None), ('p4', 25), ('p5', 'C')
     ]
 
@@ -174,6 +180,23 @@ def test_run(main=False):
     assert check_reset_2
     assert check_reset_3
     assert check_reset_4
+
+    # Testing keyword arguments
+    if py36:
+        class D(ParamsBase, _pshort=False, _pinst=True):
+            params = dict(
+                p1=True,
+            )
+
+    else:
+        @metaparams(_pinst=True)
+        class D:
+            params = dict(
+                p1=True,
+            )
+
+    d = D()
+    assert(d.params.p1)
 
 if __name__ == '__main__':
     test_run(main=True)
