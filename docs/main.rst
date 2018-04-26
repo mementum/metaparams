@@ -27,7 +27,7 @@ Case in which we have added a restriction to only consider ``**kwargs`` which
 have already been defined in the class. But even with this pattern, some things
 could have room for improvement:
 
-   - Avoid the manual coding in ``__init__`` (with or without ``**kwawrgs``)
+   - Avoid the manual coding in ``__init__`` (with or without ``**kwargs``)
    - Control the types which are passed
    - Transform the values if needed
    - Document the types when they are declared and not in the *docstring*
@@ -37,7 +37,7 @@ parameters in the docstring, but:
 
   - The type hints are just that ... hints
   - It seems better to document the parameter when it's defined.
-  - There is no way to know (except reading the docs, which sometimes does not
+  - There is no way to know (except reading the docs, which sometimes do not
     exist) if the class needs that the caller provides a value
 
 And one final caveat:
@@ -406,7 +406,7 @@ In this case:
 
 Another example::
 
-      class A_poroms(Paramsbase, _pname='_xarams')
+      class A_poroms(metaclass=MetaParams, _pname='_xarams')
           _xarams = {
               ...
           }
@@ -442,7 +442,7 @@ ways.
     This will be internally translated to a full ``dict`` entry as specified
     below
 
-  - Using a complete ```dict`` entry for the param::
+  - Using a complete ``dict`` entry for the param::
 
       params = {
           'myparam1': {
@@ -497,10 +497,10 @@ The following keyword arguments are accepted by a class definition (Python >=
   - ``_pname`` (default: ``params``)
 
     This defines the main name for the declaration and attribute for accessing
-    the declaredp parameters.
+    the declared parameters.
 
     .. note:: If one of the base classes (such as ``ParamsBase``) has already
-              set this name, it cannot be overriden by subclasses.
+              set this name, it cannot be overridden by subclasses.
 
   - ``_pshort`` (default: ``True``)
 
@@ -509,7 +509,7 @@ The following keyword arguments are accepted by a class definition (Python >=
     also be installed as ``p``.
 
     If the defined name has a leading ``_`` (underscore) it will respected and
-    the next charater will be also taken. For example: ``_myparams`` will be
+    the next character will be also taken. For example: ``_myparams`` will be
     shortened to ``_m``
 
   - ``_pinst`` (default: ``False``)
