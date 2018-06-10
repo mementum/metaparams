@@ -20,7 +20,7 @@ metaparams
 .. image:: https://readthedocs.org/projects/metaparams/badge/?version=latest
    :alt: Documentation Status
    :scale: 100%
-   :target: https://readthedocs.org/projects/metaparams/
+   :target: https://metaparams.readthedocs.io/
 
 .. image:: https://img.shields.io/pypi/pyversions/metaparams.svg
    :alt: Pytghon versions
@@ -36,7 +36,7 @@ Documentation
 
 Read the full documentation at readthedocs.org:
 
-  - `metaparams documentation <http://metaparams.readthedocs.org/en/latest/introduction.html>`_
+  - `metaparams documentation <https://metaparams.readthedocs.io/>`_
 
 Python 3 Only
 =============
