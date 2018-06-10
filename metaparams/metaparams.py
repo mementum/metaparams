@@ -93,8 +93,8 @@ class ParamsMeta(type):
 
             # Generate dict entries for each parameter in the tuple definition
             for np in nparams:
-                pn, pv, *pothers = np
-                ndctpn = {NAME_VAL: pv}
+                pn, *pothers = np
+                ndctpn = {}  # {NAME_VAL: pv}
                 for nord, vord in zip(TUPLE_NAME_ORDER, TUPLE_VALUE_ORDER):
                     px, *pothers = pothers
                     ndctpn[nord] = px
@@ -107,7 +107,7 @@ class ParamsMeta(type):
                 except KeyError:
                     pass  # only value was specified ..
                 else:
-                    if isinstance(req, str):
+                    if isinstance(req_or_doc, str):
                         # Doc was given, swap with required (or default value)
                         ndctpn[NAME_REQUIRED] = ndctpn.get(NAME_DOC,
                                                            VALUE_REQUIRED)
