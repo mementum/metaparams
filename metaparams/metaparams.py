@@ -22,7 +22,7 @@ import collections
 import textwrap
 import sys
 
-from metaframe import MetaFrame, MetaFrameBase
+from metaframe import MetaFrame
 
 __all__ = ['metaparams', 'MetaParams', 'Params', 'ParamsBase']
 
