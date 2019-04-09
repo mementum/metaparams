@@ -54,14 +54,18 @@ The ``metaparams`` library offers therefore the following pattern::
 
   class A(metaparams.ParamsBase):
       params = {
+          # The option will be automatically prefixed with ``--`` in argparse
           'value1': {
-              'value': 'value1',
-              'doc': 'This is value1',
-              'required': False,
-              'type': str,
-              'transform': None,
-              'argparse': True,
-              'group': None,
+              'value': 'value1',  # default value (can be skipped if required)
+              'doc': 'This is value1',  # documentation (goes to docstring)
+              'required': False,  # if required or not (also for argparse)
+              'type': str,  # for type checking
+              'transform': None,  # callable which transforms a str
+              'argparse': True,  # if the option shall be added to argparse
+              'group': None,  # a group name for argparse options grouping
+              'choices': None,  # list of "choices" for argparse integration
+              'alias': None,  # list of "alias" for argparse integration
+                              # automatically prefixed with ``-``
           },
           'value2': {
               'required': True,
@@ -137,12 +141,18 @@ it::
 
   class A(metaparams.ParamsBase):
       params = {
+          # The option will be automatically prefixed with ``--`` in argparse
           'value1': {
-              'value': 'value1',
-              'doc': 'This is value1',
-              'required': False,
-              'type': str,
-              'transform': None,
+              'value': 'value1',  # default value (can be skipped if required)
+              'doc': 'This is value1',  # documentation (goes to docstring)
+              'required': False,  # if required or not (also for argparse)
+              'type': str,  # for type checking
+              'transform': None,  # callable which transforms a str
+              'argparse': True,  # if the option shall be added to argparse
+              'group': None,  # a group name for argparse options grouping
+              'choices': None,  # list of "choices" for argparse integration
+              'alias': None,  # list of "alias" for argparse integration
+                              # automatically prefixed with ``-``
           },
           'value2': {
               'required': True,
@@ -308,7 +318,8 @@ a class will add new command line switches to match those definitions.
               'type': str,
               'transform': None,
               'argparse': True,
-              'group': Non,
+              'group': None,
+              'choices': None,
           },
           'value2': {
               'required': True,
@@ -336,8 +347,8 @@ Or even simpler::
     a = A.params._create(args)
 
 
-In the example above for ``value1`` two (2) entries are shown which influence
-the ``argparse`` integration
+In the example above for ``value1`` three entries are shown which specifically
+influence the ``argparse`` integration
 
   - ``argparse``: if ``True`` (default), the parameter is included in the
     integration
@@ -345,6 +356,8 @@ the ``argparse`` integration
   - ``group``: if not ``None``, the passed name is used to create a parsing
     group. In this ways, several parameters can be logically grouped.
 
+  - ``choices``: if not ``None``, it must be an iterable of options from which
+    it can be chosen and will be passed to ``argparse``
 
 The API
 #######
