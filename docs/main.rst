@@ -60,6 +60,8 @@ The ``metaparams`` library offers therefore the following pattern::
               'required': False,
               'type': str,
               'transform': None,
+              'argparse': True,
+              'group': None,
           },
           'value2': {
               'required': True,
@@ -70,9 +72,15 @@ The ``metaparams`` library offers therefore the following pattern::
 We have provided a full definition for ``value1``, a reduced one for ``value2``
 and just the actual default value is provided for ``value3``
 
-  - ``value1`` gets documented, gets a default value, is marked as not
-    *required*, must be of type ``str`` and will undergo no *transform*
-    (``None`` is given rather than a transformation function)
+  - ``value1`` (complete example) gets documented, gets a default value, is
+    marked as not *required*, must be of type ``str`` and will undergo no
+    *transform* (``None`` is given rather than a transformation function)
+
+    Because ``argparse`` is ``True`` it will included in the ``argparse``
+    integration (if used)
+
+    And it will be added to no ``argpare`` parsing group because ``group`` is
+    ``None``
 
   - ``value2`` on the other hand is just marked as **required**. If not
     provided when the host class is instantiated an *Exception* will be raised
@@ -299,6 +307,8 @@ a class will add new command line switches to match those definitions.
               'required': False,
               'type': str,
               'transform': None,
+              'argparse': True,
+              'group': Non,
           },
           'value2': {
               'required': True,
@@ -324,6 +334,17 @@ Or even simpler::
 
     # The integration of command line switches values for instantiation
     a = A.params._create(args)
+
+
+In the example above for ``value1`` two (2) entries are shown which influence
+the ``argparse`` integration
+
+  - ``argparse``: if ``True`` (default), the parameter is included in the
+    integration
+
+  - ``group``: if not ``None``, the passed name is used to create a parsing
+    group. In this ways, several parameters can be logically grouped.
+
 
 The API
 #######
