@@ -53,13 +53,19 @@ NAME_ARGPARSE = 'argparse'
 VALUE_ARGPARSE = True
 NAME_ARGGROUP = 'group'
 VALUE_ARGGROUP = None
+NAME_ARGCHOICES = 'choices'
+VALUE_ARGCHOICES = None
+NAME_ARGALIAS = 'alias'
+VALUE_ARGALIAS = None
 
 # Default order expected for params when defined using tuples
 TUPLE_NAME_ORDER = (NAME_VAL, NAME_REQUIRED, NAME_DOC, NAME_TYPE,
-                    NAME_TRANSFORM, NAME_ARGPARSE, NAME_ARGGROUP)
+                    NAME_TRANSFORM, NAME_ARGPARSE, NAME_ARGGROUP,
+                    NAME_ARGCHOICES, NAME_ARGALIAS)
 
 TUPLE_VALUE_ORDER = (VALUE_VAL, VALUE_REQUIRED, VALUE_DOC, VALUE_TYPE,
-                     VALUE_TRANSFORM, VALUE_ARGPARSE, VALUE_ARGGROUP)
+                     VALUE_TRANSFORM, VALUE_ARGPARSE, VALUE_ARGGROUP,
+                     VALUE_ARGCHOICES, VALUE_ARGALIAS)
 
 NAME_DOCARGS = 'Args'
 
@@ -147,6 +153,8 @@ class ParamsMeta(type):
             v.setdefault(NAME_TRANSFORM, VALUE_TRANSFORM)
             v.setdefault(NAME_ARGPARSE, VALUE_ARGPARSE)
             v.setdefault(NAME_ARGGROUP, VALUE_ARGGROUP)
+            v.setdefault(NAME_ARGCHOICES, VALUE_ARGCHOICES)
+            v.setdefault(NAME_ARGALIAS, VALUE_ARGALIAS)
 
             pdct[k] = v  # store the complete param definition
 
@@ -158,6 +166,8 @@ class ParamsMeta(type):
         ptmpl += ['(transform: {})']
         ptmpl += ['(argparse: {})']
         ptmpl += ['(group: {})']
+        ptmpl += ['(choices: {})']
+        ptmpl += ['(alias: {})']
         ptmpl += ['\n{}']
         ptmpl = ' '.join(ptmpl)
 
@@ -172,6 +182,8 @@ class ParamsMeta(type):
                 v[NAME_TRANSFORM],
                 v[NAME_ARGPARSE],
                 v[NAME_ARGGROUP],
+                v[NAME_ARGCHOICES],
+                v[NAME_ARGALIAS],
                 vdoc + ('\n' if vdoc else ''))
             doc += [t]
 
@@ -417,6 +429,17 @@ class Params(metaclass=ParamsMeta):
         return PARAMS[cls][name][NAME_ARGGROUP]
 
     @classmethod
+    def _choices(cls, name):
+        '''Returns the choices been defined for the given ``name``'''
+        return PARAMS[cls][name][NAME_ARGCHOICES]
+
+    @classmethod
+    def _alias(cls, name):
+        '''Returns the aliases for the argparse main name. These will be
+        prefixed with simply ``-``'''
+        return PARAMS[cls][name][NAME_ARGALIAS]
+
+    @classmethod
     def _argparse(cls, parser, group=None, skip=True, minus=True):
         '''Autogenerate command line switches for an argparse parser.
 
@@ -453,10 +476,19 @@ class Params(metaclass=ParamsMeta):
                     parser.add_argument_group(title=grp)
                 )
 
-            if minus:
-                p = p.replace('_', '-')
+            choices = cls._choices(p)  # add choices if any
+            if choices:
+                pkwargs['choices'] = choices
 
-            pgroup.add_argument('--' + p, **pkwargs)
+            # Add the aliases
+            palias = ['-' + x for x in cls._alias(p) or []]
+
+            if minus:  # last action to avoid breaking identifiers
+                p = p.replace('_', '-')
+                palias = [x.replace('_', '-') for x in palias]
+
+            # Generate the option
+            pgroup.add_argument('--' + p, *palias, **pkwargs)
 
     @classmethod
     def _parseargs(cls, args, skip=True):
