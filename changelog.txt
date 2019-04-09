@@ -1,3 +1,8 @@
+2.0.3
+  - Added support for "choices" for the integration with argparse
+  - Added support for "alias" to add extra option names for argparse which
+    are prefixed with only "-"
+
 2.0.2
   - Correct name setting in _reset if name is specified
   - Add "group" option to parameters to logically group in argparse
