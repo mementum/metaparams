@@ -373,7 +373,7 @@ class Params(metaclass=ParamsMeta):
         '''Reset parameter ``name`` if given, else reset all to the default
         values'''
         if name:
-            setattr(self, k, self._defvalue(name))
+            setattr(self, name, self._defvalue(name))
         else:
             for k, v in self._defitems():
                 setattr(self, k, v)
