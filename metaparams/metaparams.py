@@ -51,13 +51,15 @@ NAME_TRANSFORM = 'transform'
 VALUE_TRANSFORM = None
 NAME_ARGPARSE = 'argparse'
 VALUE_ARGPARSE = True
+NAME_ARGGROUP = 'group'
+VALUE_ARGGROUP = None
 
 # Default order expected for params when defined using tuples
 TUPLE_NAME_ORDER = (NAME_VAL, NAME_REQUIRED, NAME_DOC, NAME_TYPE,
-                    NAME_TRANSFORM, NAME_ARGPARSE)
+                    NAME_TRANSFORM, NAME_ARGPARSE, NAME_ARGGROUP)
 
 TUPLE_VALUE_ORDER = (VALUE_VAL, VALUE_REQUIRED, VALUE_DOC, VALUE_TYPE,
-                     VALUE_TRANSFORM, VALUE_ARGPARSE)
+                     VALUE_TRANSFORM, VALUE_ARGPARSE, VALUE_ARGGROUP)
 
 NAME_DOCARGS = 'Args'
 
@@ -144,6 +146,7 @@ class ParamsMeta(type):
             v.setdefault(NAME_TYPE, VALUE_TYPE)
             v.setdefault(NAME_TRANSFORM, VALUE_TRANSFORM)
             v.setdefault(NAME_ARGPARSE, VALUE_ARGPARSE)
+            v.setdefault(NAME_ARGGROUP, VALUE_ARGGROUP)
 
             pdct[k] = v  # store the complete param definition
 
@@ -154,6 +157,7 @@ class ParamsMeta(type):
         ptmpl += ['(type: {})']
         ptmpl += ['(transform: {})']
         ptmpl += ['(argparse: {})']
+        ptmpl += ['(group: {})']
         ptmpl += ['\n{}']
         ptmpl = ' '.join(ptmpl)
 
@@ -167,6 +171,7 @@ class ParamsMeta(type):
                 v[NAME_TYPE],
                 v[NAME_TRANSFORM],
                 v[NAME_ARGPARSE],
+                v[NAME_ARGGROUP],
                 vdoc + ('\n' if vdoc else ''))
             doc += [t]
 
@@ -407,6 +412,11 @@ class Params(metaclass=ParamsMeta):
             setattr(self, k, v)
 
     @classmethod
+    def _group(cls, name):
+        '''Returns the group which has been defined for the given ``name``'''
+        return PARAMS[cls][name][NAME_ARGGROUP]
+
+    @classmethod
     def _argparse(cls, parser, group=None, skip=True, minus=True):
         '''Autogenerate command line switches for an argparse parser.
 
@@ -422,6 +432,8 @@ class Params(metaclass=ParamsMeta):
         if group:
             parser = parser.add_argument_group(title=group)
 
+        pgroups = {None: parser}  # to keep track of grouping for options
+
         for p in cls:
             if skip and p[-1] == '_':
                 continue
@@ -431,10 +443,20 @@ class Params(metaclass=ParamsMeta):
                 required=cls._isrequired(p),
                 default=cls._defvalue(p),
             )
+
+            grp = cls._group(p)  # before replacing _ to -
+            try:
+                pgroup = pgroups[grp]
+            except KeyError:
+                pgroup = pgroups.setdefault(
+                    grp,
+                    parser.add_argument_group(title=grp)
+                )
+
             if minus:
                 p = p.replace('_', '-')
 
-            parser.add_argument('--' + p, **pkwargs)
+            pgroup.add_argument('--' + p, **pkwargs)
 
     @classmethod
     def _parseargs(cls, args, skip=True):
