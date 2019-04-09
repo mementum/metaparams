@@ -1,3 +1,20 @@
+2.0.2
+  - Correct name setting in _reset if name is specified
+  - Add "group" option to parameters to logically group in argparse
+    integration
+  - Added argparse and group to the docs
+
+2.0.1
+  - Fix support for tuples definition and exchanging documentation/required
+    parameters in a tuple
+  - Docs corrections and readthedocs link update
+
+2.0.0
+  - Complete rework with extra values for parameters, documentation and argparse
+    integration
+  - Python 3 only
+
+
 1.0.4
   - Removed the need to use () in decorator if no kwargs are specified
   - pip packaging fixes for Py3
